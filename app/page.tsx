@@ -1,15 +1,18 @@
-"use client"
-import { Button } from "@/components/ui/button";
+'use client'
 
-export default function Home() {
+import { FeatureGrid } from '@/components/FeatureSection';
+import { Footer } from '@/components/Footer';
+import HeroSection from "@/components/HeroSection"
+import { HowItWorks } from '@/components/HowItWorks';
+
+export default function LandingPage() {
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Button
-      variant={"default"}
-      >
-        button
-      </Button>
-    </div>
-  );
+    <>
+    <HeroSection />
+    <FeatureGrid />
+    <HowItWorks />
+    <Footer />
+    </>
+  )
 }

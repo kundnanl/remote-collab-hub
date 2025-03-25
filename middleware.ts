@@ -1,37 +1,42 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextRequest, NextResponse } from "next/server";
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
 
-const isOnboardingRoute = createRouteMatcher(["/onboarding"]);
-const isPublicRoute = createRouteMatcher(["/public", "/sign-in", "/sign-up"]);
+const isOnboardingRoute = createRouteMatcher(['/onboarding'])
+const isPublicRoute = createRouteMatcher([
+  '/',
+  '/sign-in',
+  '/sign-up',
+  '/onboarding',
+  '/api/webhooks/clerk',
+])
 
-export default clerkMiddleware(async (auth, req: NextRequest) => {
-  const { userId, sessionClaims, redirectToSignIn } = await auth();
+export default clerkMiddleware(async (auth, req) => {
+  const { userId, sessionClaims, redirectToSignIn } = await auth()
 
-  // Allow access to sign-in, sign-up, and onboarding pages
-  if (userId && isOnboardingRoute(req)) return NextResponse.next();
-  if (!userId && isPublicRoute(req)) return NextResponse.next();
+  const pathname = req.nextUrl.pathname
 
-  // Prevent infinite sign-in loop
-  if (req.nextUrl.pathname.startsWith("/sign-in") || req.nextUrl.pathname.startsWith("/sign-up")) {
-    return NextResponse.next();
+  const isPublicApiCall =
+    pathname.startsWith('/api/trpc/user.completeOnboarding')
+
+  if (!userId && !isPublicRoute(req) && !isPublicApiCall) {
+    return redirectToSignIn({ returnBackUrl: req.url })
   }
 
-  // Redirect unauthenticated users to sign-in
-  if (!userId) {
-    return redirectToSignIn({ returnBackUrl: req.url });
+  if (
+    userId &&
+    !sessionClaims?.metadata?.onboardingComplete &&
+    !isOnboardingRoute(req) &&
+    !isPublicApiCall
+  ) {
+    return NextResponse.redirect(new URL('/onboarding', req.url))
   }
 
-  // Redirect users to onboarding if they haven't completed it
-  if (userId && !sessionClaims?.metadata?.onboardingComplete) {
-    return NextResponse.redirect(new URL("/onboarding", req.url));
-  }
-
-  return NextResponse.next();
-});
+  return NextResponse.next()
+})
 
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|png|svg|ico)).*)",
-    "/(api|trpc)(.*)",
+    '/((?!_next|.*\\..*).*)',
+    '/(api|trpc)(.*)',
   ],
-};
+}

@@ -8,40 +8,33 @@ datasource db {
 }
 
 model User {
-  id            String  @id @default(cuid()) 
-  clerkId       String  @unique
-  email         String  @unique
+  id            String   @id @default(cuid())
+  clerkId       String   @unique
+  email         String   @unique
   name          String?
-  onboardingComplete Boolean @default(false) // Track onboarding status
-  organizations OrganizationMember[]
+  imageUrl      String?
+  onboardingComplete Boolean @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  organizations OrganizationMember[]
 }
 
 model Organization {
-  id           String   @id @default(cuid()) 
-  clerkOrgId   String   @unique
-  name         String
-  members      OrganizationMember[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(cuid())
+  clerkOrgId    String   @unique
+  name          String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  members       OrganizationMember[]
 }
 
 model OrganizationMember {
   id             String   @id @default(cuid())
   userId         String
   organizationId String
-  role           Role
 
   user           User         @relation(fields: [userId], references: [id])
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  createdAt      DateTime @default(now())
-
-  @@unique([userId, organizationId])
-}
-
-enum Role {
-  ADMIN
-  MEMBER
+  createdAt      DateTime     @default(now())
 }
