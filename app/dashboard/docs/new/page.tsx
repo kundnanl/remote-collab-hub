@@ -12,13 +12,12 @@ export default function NewDocumentPage() {
   const [title, setTitle] = useState('')
   const router = useRouter()
 
-  // @ts-expect-error TS2589: Type instantiation is excessively deep
   const mutation = trpc.docs.createDocument.useMutation({
     onSuccess: ({ document }) => {
       router.push(`/dashboard/docs/${document.id}`)
     },
-  })
-
+  }) satisfies ReturnType<typeof trpc.docs.createDocument.useMutation>
+  
   const handleCreate = () => {
     if (!title.trim()) return
     mutation.mutate({ title })
