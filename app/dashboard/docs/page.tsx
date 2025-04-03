@@ -105,7 +105,7 @@ export default function DocsPage() {
       {/* Docs grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <AnimatePresence>
-          {filteredDocs.map((doc, i) => (
+        {filteredDocs.map((doc: { id: string; title: string; role: string; createdAt: string }, i) => (
             <motion.div
               key={doc.id}
               initial={{ opacity: 0, y: 8 }}
