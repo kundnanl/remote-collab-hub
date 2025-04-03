@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
 @plugin "tailwindcss-animate";
+@plugin "@tailwindcss/typography";
+
 
 @custom-variant dark (&:is(.dark *));
 
@@ -170,3 +172,44 @@
     --chart-5: 340 75% 55%;
   }
 }
+
+/* Tiptap Aesthetic Tables */
+.ProseMirror table {
+  @apply w-full border-collapse rounded-lg border border-gray-300;
+}
+.ProseMirror td,
+.ProseMirror th {
+  @apply border border-gray-300 px-4 py-2 text-sm transition-colors relative;
+  overflow: visible; 
+}
+
+.ProseMirror th {
+  @apply bg-gray-100 font-semibold text-left;
+}
+.ProseMirror td:focus-within,
+.ProseMirror th:focus-within {
+  outline: 2px solid #4f46e5; /* indigo-600 */
+  outline-offset: -2px;
+}
+
+.ProseMirror .selectedCell {
+  background-color: rgba(0, 0, 255, 0.2); /* Light blue background */
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.ProseMirror .column-resize-handle {
+  background-color: #dc78f5;
+  position: absolute;
+  right: -3px;
+  top: 0;
+  height: 100%;
+  width: 4px;
+  z-index: 10; 
+
+    cursor: ew-resize;
+    cursor: col-resize;
+  }
+

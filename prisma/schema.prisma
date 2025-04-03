@@ -8,33 +8,70 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  clerkId       String   @unique
-  email         String   @unique
-  name          String?
-  imageUrl      String?
-  onboardingComplete Boolean @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  organizations OrganizationMember[]
+  id                 String               @id @default(cuid())
+  clerkId            String               @unique
+  email              String               @unique
+  name               String?
+  imageUrl           String?
+  onboardingComplete Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  organizations      OrganizationMember[]
+
+  documents   Document[]   @relation("UserDocuments")
+  permissions Permission[]
 }
 
 model Organization {
-  id            String   @id @default(cuid())
-  clerkOrgId    String   @unique
-  name          String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  members       OrganizationMember[]
+  id         String               @id @default(cuid())
+  clerkOrgId String               @unique
+  name       String
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  members    OrganizationMember[]
+  Document   Document[]
 }
 
 model OrganizationMember {
-  id             String   @id @default(cuid())
+  id             String @id @default(cuid())
   userId         String
   organizationId String
 
-  user           User         @relation(fields: [userId], references: [id])
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
-  createdAt      DateTime     @default(now())
+  createdAt DateTime @default(now())
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  title     String
+  content   Json
+  ownerId   String 
+  orgId     String 
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner       User     @relation("UserDocuments", fields: [ownerId], references: [clerkId])
+  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
+  permissions Permission[]
+}
+
+model Permission {
+  id         String         @id @default(cuid())
+  userId     String 
+  documentId String
+  role       PermissionRole 
+
+  document Document @relation(fields: [documentId], references: [id])
+  user     User     @relation(fields: [userId], references: [clerkId])
+
+  @@unique([userId, documentId])
+}
+
+enum PermissionRole {
+  VIEWER
+  EDITOR
+  OWNER
 }

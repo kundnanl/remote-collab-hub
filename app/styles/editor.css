@@ -1,0 +1,34 @@
+/* Cursor (caret) styling */
+.tiptap .collaboration-cursor__caret {
+    border-left: 2px solid var(--user-color, #facc15);
+    margin-left: -1px;
+    margin-right: -1px;
+    position: relative;
+    height: 1em;
+    box-sizing: border-box;
+    z-index: 10;
+    animation: blink 1s step-end infinite;
+  }
+  
+  @keyframes blink {
+    0%, 100% { opacity: 1 }
+    50% { opacity: 0 }
+  }
+  
+  /* Username label above the caret */
+  .tiptap .collaboration-cursor__label {
+    position: absolute;
+    top: -1.4em;
+    left: -1px;
+    transform: translateY(-2px);
+    background-color: var(--user-color, #facc15);
+    color: black;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 20;
+  }
+  

@@ -7,24 +7,38 @@ import {
   SignInButton,
   SignUpButton,
   UserButton,
+  OrganizationSwitcher,
 } from '@clerk/nextjs'
 import { Menu, X } from 'lucide-react'
+import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
+  const pathname = usePathname()
 
-  const navLinks = [
+  const isDashboard = pathname?.startsWith('/dashboard')
+
+  const landingNav = [
     { label: 'Home', href: '/' },
     { label: 'Features', href: '#features' },
     { label: 'How It Works', href: '#how-it-works' },
     { label: 'Get Started', href: '/sign-up' },
   ]
 
+  const appNav = [
+    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Tasks', href: '/dashboard/tasks' },
+    { label: 'Docs', href: '/dashboard/docs' },
+    { label: 'Meet', href: '/dashboard/meet' },
+  ]
+
+  const activeNav = isDashboard ? appNav : landingNav
+
   return (
-    <nav className="w-full z-50">
+    <nav className="w-full z-50 border-b border-gray-200 bg-white/70 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-24 py-4 flex items-center justify-between">
         {/* Brand */}
         <Link href="/" className="text-xl font-bold tracking-tight">
@@ -33,7 +47,7 @@ export function Navbar() {
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center space-x-8 text-sm font-medium">
-          {navLinks.map((link) => (
+          {activeNav.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -45,8 +59,17 @@ export function Navbar() {
           ))}
         </div>
 
-        {/* Auth Controls */}
+        {/* Controls */}
         <div className="hidden md:flex items-center space-x-4">
+          {isDashboard && (
+            <OrganizationSwitcher
+              appearance={{
+                elements: {
+                  organizationSwitcherTrigger: 'border border-gray-200 px-2 py-1 rounded-md',
+                },
+              }}
+            />
+          )}
           <SignedOut>
             <SignInButton mode="modal">
               <Button variant="outline" size="sm">Sign In</Button>
@@ -76,7 +99,7 @@ export function Navbar() {
             className="md:hidden px-6 pb-4"
           >
             <div className="flex flex-col space-y-3 text-sm font-medium">
-              {navLinks.map((link) => (
+              {activeNav.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
@@ -86,6 +109,17 @@ export function Navbar() {
                   {link.label}
                 </Link>
               ))}
+
+              {isDashboard && (
+                <OrganizationSwitcher
+                  appearance={{
+                    elements: {
+                      organizationSwitcherTrigger: 'border border-gray-200 px-2 py-1 rounded-md mt-2',
+                    },
+                  }}
+                />
+              )}
+
               <SignedOut>
                 <SignInButton mode="modal">
                   <Button variant="outline" size="sm" className="w-full">
