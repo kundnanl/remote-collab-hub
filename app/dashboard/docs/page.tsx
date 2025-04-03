@@ -1,39 +1,40 @@
-'use client'
+"use client";
 
-import { trpc } from '@/server/client'
-import { Plus, Info } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useState, useMemo } from 'react'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+import { trpc } from "@/server/client";
+import { Plus, Info } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useState, useMemo } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@radix-ui/react-tooltip'
+} from "@radix-ui/react-tooltip";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from "@/components/ui/select";
 
-const filters = ['ALL', 'OWNED', 'SHARED'] as const
-type FilterOption = (typeof filters)[number]
+const filters = ["ALL", "OWNED", "SHARED"] as const;
+type FilterOption = (typeof filters)[number];
 
 export default function DocsPage() {
-  const { data: documents, isLoading } = trpc.docs.getMyDocuments.useQuery()
-  const [filter, setFilter] = useState<FilterOption>('ALL')
+  const { data: documents, isLoading } = trpc.docs.getMyDocuments.useQuery();
+  const [filter, setFilter] = useState<FilterOption>("ALL");
 
   const filteredDocs = useMemo(() => {
-    if (!documents) return []
-    if (filter === 'ALL') return documents
-    if (filter === 'OWNED') return documents.filter((d) => d.role === 'OWNER')
-    return documents.filter((d) => d.role !== 'OWNER')
-  }, [documents, filter])
+    if (!documents) return [];
+    if (filter === "ALL") return documents;
+    if (filter === "OWNED")
+      return documents.filter((d: { role: string }) => d.role === "OWNER");
+    return documents.filter((d: { role: string }) => d.role !== "OWNER");
+  }, [documents, filter]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -41,7 +42,9 @@ export default function DocsPage() {
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">My Documents</h1>
-          <p className="text-sm text-muted-foreground">Browse, filter and manage your docs.</p>
+          <p className="text-sm text-muted-foreground">
+            Browse, filter and manage your docs.
+          </p>
         </div>
 
         <Link href="/dashboard/docs/new">
@@ -53,7 +56,10 @@ export default function DocsPage() {
 
       {/* Filter bar */}
       <div className="flex justify-end">
-        <Select value={filter} onValueChange={(val) => setFilter(val as FilterOption)}>
+        <Select
+          value={filter}
+          onValueChange={(val) => setFilter(val as FilterOption)}
+        >
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Filter by role" />
           </SelectTrigger>
@@ -87,7 +93,9 @@ export default function DocsPage() {
             transition={{ duration: 0.4 }}
             className="w-40 h-40 mb-6"
           />
-          <h2 className="text-lg font-medium text-gray-800 mb-1">No documents found</h2>
+          <h2 className="text-lg font-medium text-gray-800 mb-1">
+            No documents found
+          </h2>
           <p className="text-sm text-muted-foreground">
             Try changing your filter or create a new document to get started.
           </p>
@@ -106,7 +114,10 @@ export default function DocsPage() {
               transition={{ delay: i * 0.04 }}
               className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition group"
             >
-              <Link href={`/dashboard/docs/${doc.id}`} className="block space-y-3">
+              <Link
+                href={`/dashboard/docs/${doc.id}`}
+                className="block space-y-3"
+              >
                 <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition truncate">
                   {doc.title}
                 </h3>
@@ -134,5 +145,5 @@ export default function DocsPage() {
         </AnimatePresence>
       </div>
     </div>
-  )
+  );
 }
