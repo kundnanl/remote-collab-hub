@@ -43,7 +43,7 @@ export default async function RootLayout({
             <div><FullPageLoader /></div>
           </ClerkLoading>
           <ClerkLoaded>
-          <main className="min-h-screen w-full bg-gradient-to-br from-[#f9fafb] to-[#e6e8ec] text-gray-900">
+          <main className="min-h-screen font-sans antialiased grainy">
             <Navbar />
           {children}
           </main>

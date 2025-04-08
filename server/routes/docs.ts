@@ -77,6 +77,7 @@ export const docsRouter = router({
       title: perm.document.title,
       createdAt: perm.document.createdAt,
       role: perm.role,
+      updatedAt: perm.document.updatedAt,
     }));
   }),
 

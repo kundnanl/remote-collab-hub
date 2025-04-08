@@ -26,7 +26,7 @@ export default function TableBubbleMenu({ editor }: Props) {
         return editor.isActive('table')
       }}
       tippyOptions={{ duration: 150 }}
-      className="bg-white shadow-md border border-gray-200 p-2 rounded-lg flex gap-2 z-[100]"
+      className="bg-white text-black shadow-md border border-gray-200 p-2 rounded-lg flex gap-2 z-[100]"
     >
       <Button
         variant="ghost"

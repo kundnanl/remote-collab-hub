@@ -42,6 +42,8 @@ model OrganizationMember {
   organization Organization @relation(fields: [organizationId], references: [id])
 
   createdAt DateTime @default(now())
+
+  @@unique([userId, organizationId], name: "user_org_unique")
 }
 
 model Document {

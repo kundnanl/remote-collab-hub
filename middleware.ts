@@ -16,8 +16,8 @@ export default clerkMiddleware(async (auth, req) => {
   const pathname = req.nextUrl.pathname
 
   const isPublicApiCall =
-    pathname.startsWith('/api/trpc/user.completeOnboarding')
-
+  pathname.startsWith('/api/trpc/user.')
+  
   if (!userId && !isPublicRoute(req) && !isPublicApiCall) {
     return redirectToSignIn({ returnBackUrl: req.url })
   }
