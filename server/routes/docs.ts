@@ -43,7 +43,13 @@ export const docsRouter = router({
             },
           },
         },
-      });
+        select: {
+          id: true,
+          title: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      })
 
       return {
         success: true,
