@@ -1,10 +1,10 @@
 "use client";
 
 import { trpc } from "@/server/client";
-import { Plus, Info } from "lucide-react";
+import { Plus, Info, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useMemo } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -27,6 +27,8 @@ type FilterOption = (typeof filters)[number];
 export default function DocsPage() {
   const { data: documents, isLoading } = trpc.docs.getMyDocuments.useQuery();
   const [filter, setFilter] = useState<FilterOption>("ALL");
+  const [navLoading, setNavLoading] = useState(false);
+  const router = useRouter();
 
   const filteredDocs = useMemo(() => {
     if (!documents) return [];
@@ -35,6 +37,11 @@ export default function DocsPage() {
       return documents.filter((d: { role: string }) => d.role === "OWNER");
     return documents.filter((d: { role: string }) => d.role !== "OWNER");
   }, [documents, filter]);
+
+  const handleNavigate = (href: string) => {
+    setNavLoading(true);
+    router.push(href);
+  };
 
   return (
     <div className="flex flex-col gap-8">
@@ -47,11 +54,20 @@ export default function DocsPage() {
           </p>
         </div>
 
-        <Link href="/dashboard/docs/new">
-          <Button size="sm" className="flex gap-2">
-            <Plus size={16} /> New Document
-          </Button>
-        </Link>
+        <Button
+          size="sm"
+          className="flex gap-2"
+          onClick={() => handleNavigate("/dashboard/docs/new")}
+          disabled={navLoading}
+        >
+          {navLoading ? (
+            <Loader2 className="animate-spin" size={16} />
+          ) : (
+            <>
+              <Plus size={16} /> New Document
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Filter bar */}
@@ -105,43 +121,51 @@ export default function DocsPage() {
       {/* Docs grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <AnimatePresence>
-        {filteredDocs.map((doc: { id: string; title: string; role: string; createdAt: string }, i) => (
-            <motion.div
-              key={doc.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ delay: i * 0.04 }}
-              className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition group"
-            >
-              <Link
-                href={`/dashboard/docs/${doc.id}`}
-                className="block space-y-3"
+          {filteredDocs.map(
+            (
+              doc: {
+                id: string;
+                title: string;
+                role: string;
+                createdAt: string;
+              },
+              i
+            ) => (
+              <motion.div
+                key={doc.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ delay: i * 0.04 }}
+                className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition group cursor-pointer"
+                onClick={() => handleNavigate(`/dashboard/docs/${doc.id}`)}
               >
-                <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition truncate">
-                  {doc.title}
-                </h3>
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition truncate">
+                    {doc.title}
+                  </h3>
 
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1 cursor-default">
-                          <Info size={14} />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{doc.role}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <span>
-                    Created {new Date(doc.createdAt).toLocaleDateString()}
-                  </span>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-1 cursor-default">
+                            <Info size={14} />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{doc.role}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <span>
+                      Created {new Date(doc.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
                 </div>
-              </Link>
-            </motion.div>
-          ))}
+              </motion.div>
+            )
+          )}
         </AnimatePresence>
       </div>
     </div>

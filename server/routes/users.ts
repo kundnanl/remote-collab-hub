@@ -63,71 +63,124 @@ export const userRouter = router({
       return { success: true };
     }),
 
-  joinOrganization: protectedProcedure
+    joinOrganization: protectedProcedure
     .input(
       z.object({
         orgId: z.string().min(1),
-        invitationId: z.string().optional(), // <- Add this
+        invitationId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.auth.userId;
+      console.log("[joinOrganization] userId:", userId);
+      console.log("[joinOrganization] input:", input);
+  
       const client = await clerkClient();
-
-      const user = await prisma.user.findFirstOrThrow({
-        where: { clerkId: userId },
-      });
-
-      const org = await prisma.organization.findUnique({
-        where: { clerkOrgId: input.orgId },
-      });
-
-      if (!org) throw new Error("Organization not found in database.");
-
-      // ✅ Add to Clerk org
-      await client.organizations.createOrganizationMembership({
-        organizationId: input.orgId,
-        userId,
-        role: "org:member",
-      });
-
-      // ✅ Revoke invite if it exists
-      if (input.invitationId) {
-        await client.invitations.revokeInvitation(input.invitationId);
+  
+      let user;
+      try {
+        user = await prisma.user.findFirstOrThrow({
+          where: { clerkId: userId },
+        });
+        console.log("[joinOrganization] Found user:", user.id);
+      } catch (err) {
+        console.error("[joinOrganization] Error finding user:", err);
+        throw err;
       }
-
-      // ✅ Add to your DB if not already
-      const existing = await prisma.organizationMember.findFirst({
-        where: {
-          userId: user.id,
-          organizationId: org.id,
-        },
-      });
-
-      if (!existing) {
-        await prisma.organizationMember.create({
-          data: {
+  
+      let org;
+      try {
+        org = await prisma.organization.findUnique({
+          where: { clerkOrgId: input.orgId },
+        });
+        if (!org) throw new Error("Organization not found in database.");
+        console.log("[joinOrganization] Found org:", org.id);
+      } catch (err) {
+        console.error("[joinOrganization] Error finding org:", err);
+        throw err;
+      }
+  
+      try {
+        const memberships = await client.users.getOrganizationMembershipList({
+          userId
+        });
+        const alreadyMember = memberships.data.some(
+          (m) => m.organization.id === input.orgId
+        );
+      
+        if (!alreadyMember) {
+          await client.organizations.createOrganizationMembership({
+            organizationId: input.orgId,
+            userId,
+            role: "org:member",
+          });
+          console.log("[joinOrganization] Added user to Clerk org.");
+        } else {
+          console.log("[joinOrganization] User already in Clerk org.");
+        }
+      } catch (err) {
+        console.error("[joinOrganization] Error checking/adding org membership:", err);
+        throw err;
+      }
+        
+      if (input.invitationId) {
+        try {
+          await client.invitations.revokeInvitation(input.invitationId);
+          console.log("[joinOrganization] Revoked invitation:", input.invitationId);
+        } catch (err) {
+          console.warn("[joinOrganization] Failed to revoke invitation:", err);
+        }
+      }
+  
+      try {
+        const existing = await prisma.organizationMember.findFirst({
+          where: {
             userId: user.id,
             organizationId: org.id,
           },
         });
+  
+        if (!existing) {
+          await prisma.organizationMember.create({
+            data: {
+              userId: user.id,
+              organizationId: org.id,
+            },
+          });
+          console.log("[joinOrganization] Added to DB org member table.");
+        } else {
+          console.log("[joinOrganization] User already in org member table.");
+        }
+      } catch (err) {
+        console.error("[joinOrganization] Error updating org membership:", err);
+        throw err;
       }
-
-      // ✅ Mark onboarding complete in DB
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          onboardingComplete: true,
-        },
-      });
-
-      // ✅ Also in Clerk metadata
-      await client.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          onboardingComplete: true,
-        },
-      });
-
+  
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            onboardingComplete: true,
+          },
+        });
+        console.log("[joinOrganization] Marked onboarding complete in DB.");
+      } catch (err) {
+        console.error("[joinOrganization] Error updating user onboarding status:", err);
+        throw err;
+      }
+  
+      try {
+        await client.users.updateUserMetadata(userId, {
+          publicMetadata: {
+            onboardingComplete: true,
+          },
+        });
+        console.log("[joinOrganization] Updated Clerk metadata.");
+      } catch (err) {
+        console.warn("[joinOrganization] Clerk metadata update failed:", err);
+        // Not critical, don’t throw
+      }
+  
       return { success: true };
     }),
-});
+  });
