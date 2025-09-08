@@ -3,7 +3,7 @@
 import '@/app/styles/editor.css'
 import '@/app/dashboard/docs/editor/extensions/mentionStyles.css'
 
-import { JSX, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -52,7 +52,6 @@ import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
 import { useUser } from '@clerk/nextjs'
 import suggestion from '@/app/dashboard/docs/editor/extensions/suggestion'
-import { useMentionUsers } from '@/app/dashboard/docs/editor/hooks/useMentionUsers'
 
 export default function DocumentEditorPage() {
   const router = useRouter()
@@ -62,7 +61,6 @@ export default function DocumentEditorPage() {
   const [mounted, setMounted] = useState(false)
   const { data, isLoading, error } = trpc.docs.getDocumentById.useQuery({ id: docId })
   const saveMutation = trpc.docs.updateContent.useMutation()
-  const { users } = useMentionUsers()
 
   const [isLinkModalOpen, setLinkModalOpen] = useState(false)
   const [selectedText, setSelectedText] = useState('')
@@ -164,56 +162,22 @@ export default function DocumentEditorPage() {
     )
   }
 
-  const formattingControls: {
-    command: () => boolean
-    isActive: boolean
-    icon: JSX.Element
-    key: string
-  }[] = [
-    {
-      command: () => editor.chain().focus().toggleBold().run(),
-      isActive: editor.isActive('bold'),
-      icon: <Bold size={16} />,
-      key: 'bold',
-    },
-    {
-      command: () => editor.chain().focus().toggleItalic().run(),
-      isActive: editor.isActive('italic'),
-      icon: <Italic size={16} />,
-      key: 'italic',
-    },
-    {
-      command: () => editor.chain().focus().toggleUnderline().run(),
-      isActive: editor.isActive('underline'),
-      icon: <UnderlineIcon size={16} />,
-      key: 'underline',
-    },
-    {
-      command: () => editor.chain().focus().toggleBlockquote().run(),
-      isActive: editor.isActive('blockquote'),
-      icon: <Quote size={16} />,
-      key: 'blockquote',
-    },
-    {
-      command: () => editor.chain().focus().toggleCodeBlock().run(),
-      isActive: editor.isActive('codeBlock'),
-      icon: <Code2 size={16} />,
-      key: 'codeBlock',
-    },
-    {
-      command: () => editor.chain().focus().toggleBulletList().run(),
-      isActive: editor.isActive('bulletList'),
-      icon: <List size={16} />,
-      key: 'bulletList',
-    },
-    {
-      command: () => editor.chain().focus().toggleOrderedList().run(),
-      isActive: editor.isActive('orderedList'),
-      icon: <ListOrdered size={16} />,
-      key: 'orderedList',
-    },
+  type CommandConfig = {
+    cmd: string
+    icon: React.ComponentType<{ size?: number }>
+    action: () => void
+  }
+
+  const toolbarButtons: CommandConfig[] = [
+    { cmd: 'bold', icon: Bold, action: () => editor.chain().focus().toggleBold().run() },
+    { cmd: 'italic', icon: Italic, action: () => editor.chain().focus().toggleItalic().run() },
+    { cmd: 'underline', icon: UnderlineIcon, action: () => editor.chain().focus().toggleUnderline().run() },
+    { cmd: 'blockquote', icon: Quote, action: () => editor.chain().focus().toggleBlockquote().run() },
+    { cmd: 'codeBlock', icon: Code2, action: () => editor.chain().focus().toggleCodeBlock().run() },
+    { cmd: 'bulletList', icon: List, action: () => editor.chain().focus().toggleBulletList().run() },
+    { cmd: 'orderedList', icon: ListOrdered, action: () => editor.chain().focus().toggleOrderedList().run() },
   ]
-  
+
 
   return (
     <div className="max-w-5xl mx-auto py-12 px-4 space-y-6">
@@ -229,8 +193,13 @@ export default function DocumentEditorPage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap gap-2 border p-2 rounded-md bg-gray-50">
-        {[['bold', Bold], ['italic', Italic], ['underline', UnderlineIcon], ['blockquote', Quote], ['codeBlock', Code2], ['bulletList', List], ['orderedList', ListOrdered]].map(([cmd, Icon]) => (
-          <Button key={cmd} variant="ghost" onClick={() => editor.chain().focus()[`toggle${cmd[0].toUpperCase() + cmd.slice(1)}`]?.().run()} className={editor.isActive(cmd) ? 'bg-gray-200' : ''}>
+        {toolbarButtons.map(({ cmd, icon: Icon, action }) => (
+          <Button
+            key={cmd}
+            variant="ghost"
+            onClick={action}
+            className={editor.isActive(cmd) ? 'bg-gray-200' : ''}
+          >
             <Icon size={16} />
           </Button>
         ))}

@@ -16,7 +16,7 @@ export default function NewDocumentPage() {
     onSuccess: ({ document }) => {
       router.push(`/dashboard/docs/${document.id}`)
     },
-  }) satisfies ReturnType<typeof trpc.docs.createDocument.useMutation>
+  })
   
   const handleCreate = () => {
     if (!title.trim()) return
