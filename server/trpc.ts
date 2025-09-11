@@ -33,3 +33,4 @@ export const router = t.router
 export const publicProcedure = t.procedure
 export const protectedProcedure = t.procedure.use(isAuthed)
 export const protectedOrgProcedure = t.procedure.use(requireOrg)
+export const middleware = t.middleware

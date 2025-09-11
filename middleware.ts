@@ -1,42 +1,29 @@
- import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-import { NextResponse } from 'next/server'
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
-const isOnboardingRoute = createRouteMatcher(['/onboarding'])
 const isPublicRoute = createRouteMatcher([
-  '/',
-  '/sign-in',
-  '/sign-up',
-  '/onboarding',
-  '/api/webhooks/clerk',
-])
+  "/",
+  "/sign-in",
+  "/sign-up",
+  "/api/webhooks/clerk",
+]);
 
 export default clerkMiddleware(async (auth, req) => {
-  const { userId, sessionClaims, redirectToSignIn } = await auth()
+  const { userId, redirectToSignIn } = await auth();
 
-  const pathname = req.nextUrl.pathname
+  const pathname = req.nextUrl.pathname;
 
-  const isPublicApiCall =
-  pathname.startsWith('/api/trpc/user.')
-  
+  const isPublicApiCall = pathname.startsWith("/api/trpc/user.");
+
+  // If not signed in → redirect to sign-in
   if (!userId && !isPublicRoute(req) && !isPublicApiCall) {
-    return redirectToSignIn({ returnBackUrl: req.url })
+    return redirectToSignIn({ returnBackUrl: req.url });
   }
 
-  if (
-    userId &&
-    !sessionClaims?.metadata?.onboardingComplete &&
-    !isOnboardingRoute(req) &&
-    !isPublicApiCall
-  ) {
-    return NextResponse.redirect(new URL('/onboarding', req.url))
-  }
-
-  return NextResponse.next()
-})
+  // Otherwise, just continue
+  return NextResponse.next();
+});
 
 export const config = {
-  matcher: [
-    '/((?!_next|.*\\..*).*)',
-    '/(api|trpc)(.*)',
-  ],
-}
+  matcher: ["/((?!_next|.*\\..*).*)", "/(api|trpc)(.*)"],
+};

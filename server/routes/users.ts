@@ -55,6 +55,8 @@ export const userRouter = router({
         publicMetadata: { onboardingComplete: true },
       });
 
+      
+
       await prisma.user.update({
         where: { id: user.id },
         data: { onboardingComplete: true },
