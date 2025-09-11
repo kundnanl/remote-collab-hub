@@ -20,6 +20,7 @@ model User {
 
   documents   Document[]   @relation("UserDocuments")
   permissions Permission[]
+  roomMemberships RoomMember[]
 }
 
 model Organization {
@@ -28,8 +29,10 @@ model Organization {
   name       String
   createdAt  DateTime             @default(now())
   updatedAt  DateTime             @updatedAt
+  
   members    OrganizationMember[]
   Document   Document[]
+  virtualOffice VirtualOffice?
 }
 
 model OrganizationMember {
@@ -71,6 +74,50 @@ model Permission {
 
   @@unique([userId, documentId])
 }
+
+model VirtualOffice {
+  id             String    @id @default(cuid())
+  organizationId String    @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  rooms    Room[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Room {
+  id             String    @id @default(cuid())
+  name           String
+  description    String?
+  officeId       String
+  virtualOffice  VirtualOffice @relation(fields: [officeId], references: [id])
+
+  members   RoomMember[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RoomMember {
+  id        String   @id @default(cuid())
+  roomId    String
+  userId    String
+  status    PresenceStatus @default(ONLINE)
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+
+  room Room @relation(fields: [roomId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([roomId, userId], name: "user_in_room_unique")
+}
+
+enum PresenceStatus {
+  ONLINE
+  OFFLINE
+  IDLE
+  IN_MEETING
+}
+
 
 enum PermissionRole {
   VIEWER
