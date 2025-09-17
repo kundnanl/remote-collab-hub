@@ -1,17 +1,35 @@
-import OfficeLayout from "@/components/dashboard/OfficeLayout";
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth } from '@clerk/nextjs/server' 
+import { createCaller } from '@/server' 
+import OfficeView from '@/components/dashboard/VirtualOffice';
+import { redirect } from 'next/navigation';
+
 
 export default async function OfficePage() {
-  const { userId, orgId } = await auth(); // orgId comes from Clerk session
+  const { userId, orgId } = await auth() 
 
-  if (!orgId) {
-    return <p>No organization found.</p>;
-  }
+  if (!userId || !orgId) { redirect('/') }
 
-  return (
-    <main className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Virtual Office</h1>
-      <OfficeLayout officeId={orgId} />
-    </main>
-  );
+  const caller = await createCaller()
+  const rooms = await caller.rooms.listByOrg({ orgId: orgId! })
+
+  const me = await caller.user.me()
+
+return (
+  <OfficeView
+    initialRooms={rooms.map(r => ({
+      ...r,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    }))}
+    me={{
+      userId,
+      name: me?.name ?? null,
+      imageUrl: me?.imageUrl ?? null,
+      orgId: orgId!,
+      roomId: null,
+      status: 'online',
+    }}
+    orgId={orgId!}
+  />
+)
 }

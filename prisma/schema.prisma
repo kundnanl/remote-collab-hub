@@ -16,11 +16,14 @@ model User {
   onboardingComplete Boolean              @default(false)
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
+
   organizations      OrganizationMember[]
 
   documents   Document[]   @relation("UserDocuments")
   permissions Permission[]
-  roomMemberships RoomMember[]
+
+  createdRooms Room[]        @relation("RoomCreator")
+  roomSessions RoomSession[]
 }
 
 model Organization {
@@ -29,10 +32,11 @@ model Organization {
   name       String
   createdAt  DateTime             @default(now())
   updatedAt  DateTime             @updatedAt
-  
+
   members    OrganizationMember[]
   Document   Document[]
-  virtualOffice VirtualOffice?
+
+  rooms      Room[]
 }
 
 model OrganizationMember {
@@ -58,9 +62,9 @@ model Document {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  owner       User     @relation("UserDocuments", fields: [ownerId], references: [clerkId])
+  owner        User         @relation("UserDocuments", fields: [ownerId], references: [clerkId])
   organization Organization @relation(fields: [orgId], references: [clerkOrgId])
-  permissions Permission[]
+  permissions  Permission[]
 }
 
 model Permission {
@@ -75,49 +79,45 @@ model Permission {
   @@unique([userId, documentId])
 }
 
-model VirtualOffice {
-  id             String    @id @default(cuid())
-  organizationId String    @unique
-  organization   Organization @relation(fields: [organizationId], references: [id])
-
-  rooms    Room[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum RoomKind {
+  HUDDLE
+  MEETING
+  FOCUS
+  TEAM
+  CUSTOM
 }
 
 model Room {
-  id             String    @id @default(cuid())
-  name           String
-  description    String?
-  officeId       String
-  virtualOffice  VirtualOffice @relation(fields: [officeId], references: [id])
+  id           String    @id @default(cuid())
+  orgId        String
+  name         String
+  kind         RoomKind  @default(HUDDLE)
+  isPersistent Boolean   @default(true)
+  capacity     Int?
+  createdBy    String    // User.clerkId
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  members   RoomMember[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
+  creator      User         @relation("RoomCreator", fields: [createdBy], references: [clerkId])
+  sessions     RoomSession[]
+
+  @@index([orgId])
+  @@unique([orgId, name], name: "org_room_name_unique")
 }
 
-model RoomMember {
+model RoomSession {
   id        String   @id @default(cuid())
   roomId    String
-  userId    String
-  status    PresenceStatus @default(ONLINE)
-  joinedAt  DateTime @default(now())
-  leftAt    DateTime?
+  startedBy String   // User.clerkId
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
 
   room Room @relation(fields: [roomId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [startedBy], references: [clerkId])
 
-  @@unique([roomId, userId], name: "user_in_room_unique")
+  @@index([roomId, startedAt])
 }
-
-enum PresenceStatus {
-  ONLINE
-  OFFLINE
-  IDLE
-  IN_MEETING
-}
-
 
 enum PermissionRole {
   VIEWER
