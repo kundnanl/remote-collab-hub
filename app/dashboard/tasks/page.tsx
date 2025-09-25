@@ -1,27 +1,22 @@
 // app/dashboard/tasks/page.tsx
 import { auth } from "@clerk/nextjs/server";
-import { createCaller } from "@/server";
-import TasksShell from "@/components/tasks/TasksShell";
 import { redirect } from "next/navigation";
+import { createCaller } from "@/server";
+import Backlog from "@/components/tasks/Backlog";
 
-export default async function TasksPage() {
+export default async function TasksBacklogPage() {
   const { userId, orgId } = await auth();
   if (!userId || !orgId) redirect("/");
 
   const caller = await createCaller();
-  // preload initial data for fast TTFB
-  const [board, tasks, sprints] = await Promise.all([
-    caller.boards.getDefault({ orgId }),
-    caller.tasks.list({ orgId }),
+  const [sprints, tasks] = await Promise.all([
     caller.sprints.list({ orgId }),
+    caller.tasks.list({ orgId }),
   ]);
 
   return (
-    <TasksShell
-      orgId={orgId}
-      initialBoard={board ?? { id: "no-board", orgId, name: "Default", createdAt: "", updatedAt: "", columns: [] }}
-      initialTasks={tasks}
-      initialSprints={sprints}
-    />
+    <div className="p-6">
+      <Backlog orgId={orgId} initialSprints={sprints} initialTasks={tasks} />
+    </div>
   );
 }
