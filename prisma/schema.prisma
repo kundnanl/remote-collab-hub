@@ -16,22 +16,22 @@ model User {
   onboardingComplete Boolean              @default(false)
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
-  organizations      OrganizationMember[]
 
-  documents   Document[]   @relation("UserDocuments")
-  permissions Permission[]
-  roomMemberships RoomMember[]
+  organizations      OrganizationMember[]
+  documents          Document[]   @relation("UserDocuments")
+  permissions        Permission[]
+  roomMemberships    RoomMember[]
 }
 
 model Organization {
-  id         String               @id @default(cuid())
-  clerkOrgId String               @unique
-  name       String
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
-  
-  members    OrganizationMember[]
-  Document   Document[]
+  id            String               @id @default(cuid())
+  clerkOrgId    String               @unique
+  name          String
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  members       OrganizationMember[]
+  Document      Document[]
   virtualOffice VirtualOffice?
 }
 
@@ -52,22 +52,22 @@ model Document {
   id        String   @id @default(cuid())
   title     String
   content   Json
-  ownerId   String 
-  orgId     String 
+  ownerId   String
+  orgId     String
   isPublic  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  owner       User     @relation("UserDocuments", fields: [ownerId], references: [clerkId])
-  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
-  permissions Permission[]
+  owner        User          @relation("UserDocuments", fields: [ownerId], references: [clerkId])
+  organization Organization  @relation(fields: [orgId], references: [clerkOrgId])
+  permissions  Permission[]
 }
 
 model Permission {
   id         String         @id @default(cuid())
-  userId     String 
+  userId     String
   documentId String
-  role       PermissionRole 
+  role       PermissionRole
 
   document Document @relation(fields: [documentId], references: [id])
   user     User     @relation(fields: [userId], references: [clerkId])
@@ -76,9 +76,9 @@ model Permission {
 }
 
 model VirtualOffice {
-  id             String    @id @default(cuid())
-  organizationId String    @unique
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  id             String        @id @default(cuid())
+  organizationId String        @unique
+  organization   Organization  @relation(fields: [organizationId], references: [clerkOrgId])
 
   rooms    Room[]
   createdAt DateTime @default(now())
@@ -86,7 +86,7 @@ model VirtualOffice {
 }
 
 model Room {
-  id             String    @id @default(cuid())
+  id             String        @id @default(cuid())
   name           String
   description    String?
   officeId       String
@@ -117,7 +117,6 @@ enum PresenceStatus {
   IDLE
   IN_MEETING
 }
-
 
 enum PermissionRole {
   VIEWER
