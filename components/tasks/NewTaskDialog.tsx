@@ -1,43 +1,65 @@
 "use client";
 
 import * as React from "react";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { trpc } from "@/server/client";
-import type { RouterOutputs } from "@/server/client";
-import { TaskPriority, TaskType } from "@prisma/client";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 
-type Board = NonNullable<RouterOutputs["boards"]["getDefault"]>;
-
-export function NewTaskDialog({ orgId, defaultColumnId, small }: { orgId: string; defaultColumnId?: string; small?: boolean }) {
+export function NewTaskDialog({
+  orgId,
+  defaultColumnId,
+  defaultSprintId,
+  small,
+}: {
+  orgId: string;
+  defaultColumnId?: string;
+  defaultSprintId?: string | null;
+  small?: boolean;
+}) {
   const utils = trpc.useUtils();
-  const boardQ = trpc.boards.getDefault.useQuery({ orgId }); // to list columns
+  const boardQ = trpc.boards.getDefault.useQuery({ orgId }); // load columns
 
   const [open, setOpen] = React.useState(false);
   const [title, setTitle] = React.useState("");
+  const [type, setType] = React.useState<"FEATURE" | "BUG" | "CHORE" | "DOCS">("FEATURE");
+  const [priority, setPriority] = React.useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("MEDIUM");
   const [columnId, setColumnId] = React.useState<string | undefined>(defaultColumnId);
-  const [priority, setPriority] = React.useState<TaskPriority>(TaskPriority.MEDIUM);
-  const [type, setType] = React.useState<TaskType>(TaskType.FEATURE);
 
   const create = trpc.tasks.create.useMutation({
-    onSuccess: (task) => {
-      utils.tasks.list.setData({ orgId }, (old) => (old ? [...old, task] : [task]));
+    onSuccess: () => {
+      utils.tasks.list.invalidate({ orgId });
       setTitle("");
+      setType("FEATURE");
+      setPriority("MEDIUM");
+      setColumnId(defaultColumnId);
       setOpen(false);
     },
   });
 
-  const cols = (boardQ.data?.columns ?? []) as Board["columns"];
+  const cols = boardQ.data?.columns ?? [];
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {small ? (
-          <Button size="sm" variant="outline">New</Button>
+          <Button size="sm" variant="outline">+ Task</Button>
         ) : (
-          <Button>New task</Button>
+          <Button>New Task</Button>
         )}
       </DialogTrigger>
       <DialogContent>
@@ -46,6 +68,7 @@ export function NewTaskDialog({ orgId, defaultColumnId, small }: { orgId: string
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Title */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Title</label>
             <Input
@@ -57,40 +80,58 @@ export function NewTaskDialog({ orgId, defaultColumnId, small }: { orgId: string
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Column</label>
-              <Select value={columnId} onValueChange={(v) => setColumnId(v)}>
-                <SelectTrigger><SelectValue placeholder="Choose column" /></SelectTrigger>
-                <SelectContent>
-                  {cols.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Column */}
+            {!defaultColumnId && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Column</label>
+                <Select
+                  value={columnId}
+                  onValueChange={(v) => setColumnId(v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cols.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
+            {/* Priority */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Priority</label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
+              <Select
+                value={priority}
+                onValueChange={(v) => setPriority(v as any)}
+              >
                 <SelectTrigger><SelectValue placeholder="Priority" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={TaskPriority.LOW}>Low</SelectItem>
-                  <SelectItem value={TaskPriority.MEDIUM}>Medium</SelectItem>
-                  <SelectItem value={TaskPriority.HIGH}>High</SelectItem>
-                  <SelectItem value={TaskPriority.URGENT}>Urgent</SelectItem>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="URGENT">Urgent</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
+            {/* Type */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Type</label>
-              <Select value={type} onValueChange={(v) => setType(v as TaskType)}>
+              <Select
+                value={type}
+                onValueChange={(v) => setType(v as any)}
+              >
                 <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={TaskType.FEATURE}>Feature</SelectItem>
-                  <SelectItem value={TaskType.BUG}>Bug</SelectItem>
-                  <SelectItem value={TaskType.CHORE}>Chore</SelectItem>
-                  <SelectItem value={TaskType.DOCS}>Docs</SelectItem>
+                  <SelectItem value="FEATURE">Feature</SelectItem>
+                  <SelectItem value="BUG">Bug</SelectItem>
+                  <SelectItem value="CHORE">Chore</SelectItem>
+                  <SelectItem value="DOCS">Docs</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -100,18 +141,19 @@ export function NewTaskDialog({ orgId, defaultColumnId, small }: { orgId: string
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
           <Button
+            disabled={!title.trim() || create.isPending}
             onClick={() =>
               create.mutate({
                 orgId,
                 title: title.trim(),
-                columnId: columnId ?? null,
-                priority,
                 type,
+                priority,
+                columnId: columnId ?? defaultColumnId ?? null,
+                sprintId: defaultSprintId ?? null,
               })
             }
-            disabled={!title.trim() || create.isPending}
           >
-            {create.isPending ? "Creating…" : "Create task"}
+            {create.isPending ? "Creating…" : "Create Task"}
           </Button>
         </DialogFooter>
       </DialogContent>
