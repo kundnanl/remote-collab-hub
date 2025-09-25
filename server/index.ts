@@ -1,20 +1,26 @@
 import { router } from "./trpc";
-import { userRouter } from "@/server/routes/users"
+import { userRouter } from "@/server/routes/users";
 import { docsRouter } from "@/server/routes/docs";
 import { dashboardRouter } from "@/server/routes/dashboard";
 import { roomsRouter } from "@/server/routes/rooms";
-import { createContext } from '@/server/context';
+import { createContext } from "@/server/context";
+import { boardsRouter } from "@/server/routes/boards";
+import { tasksRouter } from "@/server/routes/tasks";
+import { sprintsRouter } from "@/server/routes/sprints";
 
 export const appRouter = router({
-    user: userRouter,
-    docs: docsRouter,
-    dashboard: dashboardRouter,
-    rooms: roomsRouter
+  user: userRouter,
+  docs: docsRouter,
+  dashboard: dashboardRouter,
+  rooms: roomsRouter,
+  boards: boardsRouter,
+  tasks: tasksRouter,
+  sprints: sprintsRouter,
 });
 
 export type AppRouter = typeof appRouter;
 
 export async function createCaller() {
-  const ctx = await createContext()
-  return appRouter.createCaller(ctx)
+  const ctx = await createContext();
+  return appRouter.createCaller(ctx);
 }
