@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Remote Collab Hub
 
-## Getting Started
+A collaborative workspace platform built with **Next.js**, **tRPC**, **Prisma**, and **Clerk** to streamline remote teamwork. It provides task management, virtual office features, and secure organization-level permissions for distributed teams.
 
-First, run the development server:
+## 🚀 Features
+
+* **Authentication & Org Management**: Powered by Clerk for user and organization handling
+* **Role-Based Access**: Ensure only org members can access their tasks and projects
+* **Task Management**: Create, assign, prioritize, and track tasks with support for `TaskType` and `TaskPriority`
+* **Virtual Office**: A shared digital workspace for async + real-time collaboration
+* **tRPC API Layer**: Type-safe server calls with strict auth enforcement
+* **Database**: Backed by Prisma + PostgreSQL
+
+## 🛠️ Tech Stack
+
+* **Frontend**: Next.js 13+ (App Router) + React
+* **Backend**: tRPC
+* **Database**: Prisma ORM + PostgreSQL
+* **Auth**: Clerk
+* **UI**: Radix UI + TailwindCSS
+* **Deployment**: Vercel / Docker
+
+## 📦 Installation
+
+### Prerequisites
+
+* Node.js `>=18`
+* PostgreSQL database
+* Clerk API keys
+
+### Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# Clone the repo
+git clone https://github.com/your-org/remote-collab-hub.git
+cd remote-collab-hub
+
+# Install dependencies
+pnpm install
+
+# Setup environment
+cp .env.example .env.local
+# Fill in required vars (see below)
+
+# Run migrations
+pnpm prisma migrate dev
+
+# Start dev server
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## ⚙️ Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `NEXT_PUBLIC_CLERK_KEY` | Clerk publishable key |
+| `CLERK_SECRET_KEY` | Clerk backend key |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📖 Scripts
 
-## Learn More
+* `pnpm dev` – Start dev server
+* `pnpm build` – Build for production
+* `pnpm start` – Run production build
+* `pnpm prisma studio` – Explore DB visually
 
-To learn more about Next.js, take a look at the following resources:
+## 🧑‍💻 Contributing
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+We welcome contributions!
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/foo`)
+3. Commit changes (`git commit -m "Add foo feature"`)
+4. Push and open a PR 🎉
 
-## Deploy on Vercel
+## 🗺 Roadmap
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+* ✅ Task CRUD with org enforcement
+* ✅ Role-based membership checks
+* 🔄 Virtual office space (real-time presence, chat)
+* 🔄 Integrations with Slack/Google Calendar
+* 🔄 Analytics dashboard
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📜 License
+
+MIT © 2025 Remote Collab Hub Team
