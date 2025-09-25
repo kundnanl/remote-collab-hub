@@ -18,9 +18,6 @@ model User {
   updatedAt          DateTime             @updatedAt
 
   organizations      OrganizationMember[]
-  documents          Document[]   @relation("UserDocuments")
-  permissions        Permission[]
-  roomMemberships    RoomMember[]
 
   documents   Document[]   @relation("UserDocuments")
   permissions Permission[]
@@ -74,8 +71,8 @@ model Document {
   id        String   @id @default(cuid())
   title     String
   content   Json
-  ownerId   String
-  orgId     String
+  ownerId   String 
+  orgId     String 
   isPublic  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -87,24 +84,14 @@ model Document {
 
 model Permission {
   id         String         @id @default(cuid())
-  userId     String
+  userId     String 
   documentId String
-  role       PermissionRole
+  role       PermissionRole 
 
   document Document @relation(fields: [documentId], references: [id])
   user     User     @relation(fields: [userId], references: [clerkId])
 
   @@unique([userId, documentId])
-}
-
-model VirtualOffice {
-  id             String        @id @default(cuid())
-  organizationId String        @unique
-  organization   Organization  @relation(fields: [organizationId], references: [clerkOrgId])
-
-  rooms    Room[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 enum RoomKind {
@@ -113,7 +100,7 @@ enum RoomKind {
   FOCUS
   TEAM
   CUSTOM
-
+}
 
 model Room {
   id           String    @id @default(cuid())
@@ -146,14 +133,6 @@ model RoomSession {
 
   @@index([roomId, startedAt])
 }
-
-enum PresenceStatus {
-  ONLINE
-  OFFLINE
-  IDLE
-  IN_MEETING
-}
-
 
 enum PermissionRole {
   VIEWER
