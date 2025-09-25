@@ -5,6 +5,26 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { z } from "zod";
 
 export const userRouter = router({
+  me: protectedProcedure.query(async ({ ctx }) => {
+    if (!ctx.userId) return null;
+
+    const user = await ctx.prisma.user.findUnique({
+      where: { clerkId: ctx.userId },
+      select: {
+        id: true,
+        clerkId: true,
+        email: true,
+        name: true,
+        imageUrl: true,
+        onboardingComplete: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return user;
+  }),
+
   syncUser: protectedProcedure.mutation(async ({ ctx }) => {
     const { userId } = ctx.auth;
 
@@ -55,8 +75,6 @@ export const userRouter = router({
         publicMetadata: { onboardingComplete: true },
       });
 
-      
-
       await prisma.user.update({
         where: { id: user.id },
         data: { onboardingComplete: true },
@@ -65,7 +83,7 @@ export const userRouter = router({
       return { success: true };
     }),
 
-    joinOrganization: protectedProcedure
+  joinOrganization: protectedProcedure
     .input(
       z.object({
         orgId: z.string().min(1),
@@ -76,9 +94,9 @@ export const userRouter = router({
       const userId = ctx.auth.userId;
       console.log("[joinOrganization] userId:", userId);
       console.log("[joinOrganization] input:", input);
-  
+
       const client = await clerkClient();
-  
+
       let user;
       try {
         user = await prisma.user.findFirstOrThrow({
@@ -89,7 +107,7 @@ export const userRouter = router({
         console.error("[joinOrganization] Error finding user:", err);
         throw err;
       }
-  
+
       let org;
       try {
         org = await prisma.organization.findUnique({
@@ -101,15 +119,15 @@ export const userRouter = router({
         console.error("[joinOrganization] Error finding org:", err);
         throw err;
       }
-  
+
       try {
         const memberships = await client.users.getOrganizationMembershipList({
-          userId
+          userId,
         });
         const alreadyMember = memberships.data.some(
           (m) => m.organization.id === input.orgId
         );
-      
+
         if (!alreadyMember) {
           await client.organizations.createOrganizationMembership({
             organizationId: input.orgId,
@@ -121,19 +139,25 @@ export const userRouter = router({
           console.log("[joinOrganization] User already in Clerk org.");
         }
       } catch (err) {
-        console.error("[joinOrganization] Error checking/adding org membership:", err);
+        console.error(
+          "[joinOrganization] Error checking/adding org membership:",
+          err
+        );
         throw err;
       }
-        
+
       if (input.invitationId) {
         try {
           await client.invitations.revokeInvitation(input.invitationId);
-          console.log("[joinOrganization] Revoked invitation:", input.invitationId);
+          console.log(
+            "[joinOrganization] Revoked invitation:",
+            input.invitationId
+          );
         } catch (err) {
           console.warn("[joinOrganization] Failed to revoke invitation:", err);
         }
       }
-  
+
       try {
         const existing = await prisma.organizationMember.findFirst({
           where: {
@@ -141,7 +165,7 @@ export const userRouter = router({
             organizationId: org.id,
           },
         });
-  
+
         if (!existing) {
           await prisma.organizationMember.create({
             data: {
@@ -157,7 +181,7 @@ export const userRouter = router({
         console.error("[joinOrganization] Error updating org membership:", err);
         throw err;
       }
-  
+
       try {
         await prisma.user.update({
           where: { id: user.id },
@@ -167,10 +191,13 @@ export const userRouter = router({
         });
         console.log("[joinOrganization] Marked onboarding complete in DB.");
       } catch (err) {
-        console.error("[joinOrganization] Error updating user onboarding status:", err);
+        console.error(
+          "[joinOrganization] Error updating user onboarding status:",
+          err
+        );
         throw err;
       }
-  
+
       try {
         await client.users.updateUserMetadata(userId, {
           publicMetadata: {
@@ -182,7 +209,7 @@ export const userRouter = router({
         console.warn("[joinOrganization] Clerk metadata update failed:", err);
         // Not critical, don’t throw
       }
-  
+
       return { success: true };
     }),
-  });
+});

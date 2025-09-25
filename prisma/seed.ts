@@ -1,34 +1,48 @@
-import { PrismaClient } from "@prisma/client";
-
+// prisma/seed.ts
+import { PrismaClient, TaskStatus } from "@prisma/client";
 const prisma = new PrismaClient();
 
+async function ensureDefaultBoardForOrg(orgId: string) {
+  let board = await prisma.board.findFirst({ where: { orgId, name: "Default" } });
+  if (!board) {
+    board = await prisma.board.create({ data: { orgId, name: "Default" } });
+  }
+  const defaults: { title: string; status: TaskStatus; position: number }[] = [
+    { title: "Backlog",      status: "BACKLOG",     position: 0 },
+    { title: "To do",        status: "TODO",        position: 1 },
+    { title: "In progress",  status: "IN_PROGRESS", position: 2 },
+    { title: "Review",       status: "REVIEW",      position: 3 },
+    { title: "Done",         status: "DONE",        position: 4 },
+  ];
+  for (const col of defaults) {
+    const exists = await prisma.boardColumn.findFirst({
+      where: { boardId: board.id, status: col.status },
+    });
+    if (!exists) {
+      await prisma.boardColumn.create({
+        data: {
+          boardId: board.id,
+          title: col.title,
+          status: col.status,
+          position: col.position,
+        },
+      });
+    }
+  }
+}
+
 async function main() {
-  // Replace with your orgId from Clerk or an existing organization in DB
-  const orgId = "cmfewxs700001l204zcgpytq9";
-
-  // Create Virtual Office for org if not exists
-  const office = await prisma.virtualOffice.upsert({
-    where: { organizationId: orgId },
-    update: {},
-    create: {
-      organizationId: orgId,
-      rooms: {
-        create: [
-          { name: "Engineering Room", description: "Discuss code, bugs, and features" },
-          { name: "Design Room", description: "Brainstorm UI/UX and product ideas" },
-          { name: "Daily Standup", description: "Quick daily check-in" },
-        ],
-      },
-    },
-  });
-
-  console.log("Seeded office:", office.id);
+  const orgs = await prisma.organization.findMany({ select: { clerkOrgId: true } });
+  for (const o of orgs) {
+    await ensureDefaultBoardForOrg(o.clerkOrgId);
+  }
 }
 
 main()
-  .then(() => prisma.$disconnect())
-  .catch(async (e) => {
+  .catch((e) => {
     console.error(e);
-    await prisma.$disconnect();
     process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
   });

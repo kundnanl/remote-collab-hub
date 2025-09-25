@@ -21,18 +21,40 @@ model User {
   documents          Document[]   @relation("UserDocuments")
   permissions        Permission[]
   roomMemberships    RoomMember[]
+
+  documents   Document[]   @relation("UserDocuments")
+  permissions Permission[]
+
+  createdRooms Room[]        @relation("RoomCreator")
+  roomSessions RoomSession[]
+
+  // --- Task relations ---
+  tasksCreated Task[]        @relation("TaskCreator")
+  tasksAssigned Task[]       @relation("TaskAssignee")
+
+  taskComments TaskComment[]
+  taskActivities TaskActivity[]
 }
 
 model Organization {
-  id            String               @id @default(cuid())
-  clerkOrgId    String               @unique
-  name          String
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  id         String               @id @default(cuid())
+  clerkOrgId String               @unique
+  name       String
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
 
-  members       OrganizationMember[]
-  Document      Document[]
-  virtualOffice VirtualOffice?
+  members    OrganizationMember[]
+  Document   Document[]
+
+  rooms      Room[]
+
+  // --- Task-related back relations ---
+  boards     Board[]
+  sprints    Sprint[]
+  tasks      Task[]
+  taskRelations TaskRelation[]
+  taskComments TaskComment[]
+  taskActivities TaskActivity[]
 }
 
 model OrganizationMember {
@@ -58,8 +80,8 @@ model Document {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  owner        User          @relation("UserDocuments", fields: [ownerId], references: [clerkId])
-  organization Organization  @relation(fields: [orgId], references: [clerkOrgId])
+  owner        User         @relation("UserDocuments", fields: [ownerId], references: [clerkId])
+  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
   permissions  Permission[]
 }
 
@@ -85,30 +107,44 @@ model VirtualOffice {
   updatedAt DateTime @updatedAt
 }
 
-model Room {
-  id             String        @id @default(cuid())
-  name           String
-  description    String?
-  officeId       String
-  virtualOffice  VirtualOffice @relation(fields: [officeId], references: [id])
+enum RoomKind {
+  HUDDLE
+  MEETING
+  FOCUS
+  TEAM
+  CUSTOM
 
-  members   RoomMember[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+model Room {
+  id           String    @id @default(cuid())
+  orgId        String
+  name         String
+  kind         RoomKind  @default(HUDDLE)
+  isPersistent Boolean   @default(true)
+  capacity     Int?
+  createdBy    String    // User.clerkId
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
+  creator      User         @relation("RoomCreator", fields: [createdBy], references: [clerkId])
+  sessions     RoomSession[]
+
+  @@index([orgId])
+  @@unique([orgId, name], name: "org_room_name_unique")
 }
 
-model RoomMember {
+model RoomSession {
   id        String   @id @default(cuid())
   roomId    String
-  userId    String
-  status    PresenceStatus @default(ONLINE)
-  joinedAt  DateTime @default(now())
-  leftAt    DateTime?
+  startedBy String   // User.clerkId
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
 
   room Room @relation(fields: [roomId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [startedBy], references: [clerkId])
 
-  @@unique([roomId, userId], name: "user_in_room_unique")
+  @@index([roomId, startedAt])
 }
 
 enum PresenceStatus {
@@ -118,8 +154,190 @@ enum PresenceStatus {
   IN_MEETING
 }
 
+
 enum PermissionRole {
   VIEWER
   EDITOR
   OWNER
+}
+
+// ===== Enums =====
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  REVIEW
+  BLOCKED
+  DONE
+  ARCHIVED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SprintStatus {
+  PLANNED   
+  ACTIVE    
+  CLOSED  
+}
+
+enum TaskType {
+  FEATURE
+  BUG
+  CHORE
+  DOCS
+}
+
+enum TaskRelationType {
+  SUBTASK
+  DEPENDS_ON
+  BLOCKS
+  DUPLICATE_OF
+  RELATES_TO
+}
+
+enum TaskActivityType {
+  CREATED
+  UPDATED
+  STATUS_CHANGED
+  ASSIGNEE_CHANGED
+  COMMENT_ADDED
+  RELATION_ADDED
+  RELATION_REMOVED
+  MOVED
+}
+
+model Sprint {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  goal      String? // optional sprint goal/description
+  startDate DateTime?
+  endDate   DateTime?
+  status    SprintStatus @default(PLANNED)
+  velocityTarget Int?
+
+  // relations
+  org   Organization @relation(fields: [orgId], references: [clerkOrgId])
+  tasks Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ===== Kanban Board =====
+model Board {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
+  columns     BoardColumn[]
+
+  @@unique([orgId, name])
+}
+
+model BoardColumn {
+  id        String     @id @default(cuid())
+  boardId   String
+  title     String
+  status    TaskStatus
+  wipLimit  Int?
+  position  Int        @default(0)
+
+  board Board @relation(fields: [boardId], references: [id])
+  tasks Task[]
+
+  @@index([boardId, position])
+  @@unique([boardId, status])
+}
+
+// ===== Tasks =====
+model Task {
+  id          String       @id @default(cuid())
+  orgId       String
+  title       String
+  description String?
+  priority    TaskPriority @default(MEDIUM)
+  type        TaskType     @default(FEATURE)
+  position    Int          @default(0)  // ordering within a column
+  createdBy   String                     // User.clerkId
+  assigneeId  String?
+  sprintId    String?
+  columnId    String?                    // NEW: BoardColumn reference
+  dueDate     DateTime?
+  startDate   DateTime?
+  estimate    Int?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
+
+  creator   User   @relation("TaskCreator", fields: [createdBy], references: [clerkId])
+  assignee  User?  @relation("TaskAssignee", fields: [assigneeId], references: [clerkId])
+  sprint    Sprint? @relation(fields: [sprintId], references: [id])
+  column    BoardColumn? @relation(fields: [columnId], references: [id])
+
+  comments      TaskComment[]
+  activities    TaskActivity[]
+  outgoingRelations TaskRelation[] @relation("TaskOutgoing")
+  incomingRelations TaskRelation[] @relation("TaskIncoming")
+
+  @@index([orgId, columnId])
+  @@index([orgId, sprintId])
+  @@index([assigneeId])
+}
+
+model TaskRelation {
+  id    String            @id @default(cuid())
+  orgId String
+  fromId String
+  toId   String
+  type  TaskRelationType
+
+  from Task @relation("TaskOutgoing", fields: [fromId], references: [id])
+  to   Task @relation("TaskIncoming", fields: [toId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
+
+  @@unique([fromId, toId, type])
+  @@index([orgId, type])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  orgId     String
+  body      String
+  createdBy String
+  createdAt DateTime @default(now())
+
+  task         Task         @relation(fields: [taskId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
+  author       User         @relation(fields: [createdBy], references: [clerkId])
+
+  @@index([taskId, createdAt])
+  @@index([orgId])
+}
+
+model TaskActivity {
+  id        String            @id @default(cuid())
+  taskId    String
+  orgId     String
+  actorId   String
+  type      TaskActivityType
+  meta      Json?
+  createdAt DateTime          @default(now())
+
+  task         Task         @relation(fields: [taskId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
+  actor        User         @relation(fields: [actorId], references: [clerkId])
+
+  @@index([taskId, createdAt])
+  @@index([orgId, type])
 }
