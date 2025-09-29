@@ -102,19 +102,21 @@ export default function OfficeRoomPage({
 
             cleanup();
         };
-    }, [id]); // Removed tokenMutation and router from dependencies
+    }, [id]);
 
     return (
-        <div style={{ height: "100dvh", display: "grid" }}>
-            <Tabs defaultValue="call">
-                <TabsList>
+        <div className="h-screen w-screen flex flex-col">
+            <Tabs defaultValue="call" className="flex flex-col flex-1">
+                <TabsList className="shrink-0">
                     <TabsTrigger value="call">Call</TabsTrigger>
                     <TabsTrigger value="board">Whiteboard</TabsTrigger>
                 </TabsList>
-                <TabsContent value="call" style={{ height: "calc(100dvh - 60px)" }}>
-                    <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+
+                <TabsContent value="call" className="flex-1 overflow-hidden">
+                    <div ref={containerRef} className="w-full h-full" />
                 </TabsContent>
-                <TabsContent value="board" style={{ height: "calc(100dvh - 60px)" }}>
+
+                <TabsContent value="board" className="flex-1 overflow-hidden">
                     <BoardPane roomId={id} />
                 </TabsContent>
             </Tabs>
