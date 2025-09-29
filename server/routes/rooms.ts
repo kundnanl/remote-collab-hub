@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc"; // adjust to your helpers
 import { TRPCError } from "@trpc/server";
+import { createDailyRoom } from "@/lib/daily";
 
 const RoomInput = z.object({
   name: z.string().min(1).max(64),
@@ -31,28 +32,36 @@ export const roomsRouter = router({
       });
     }),
 
-  create: protectedProcedure
-    .input(z.object({ orgId: z.string(), data: RoomInput }))
-    .mutation(async ({ ctx, input }) => {
-      const isMember = await ctx.prisma.organizationMember.findFirst({
-        where: {
-          organization: { clerkOrgId: input.orgId },
-          user: { clerkId: ctx.auth.userId },
-        },
-      });
-      if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+create: protectedProcedure
+  .input(z.object({ orgId: z.string(), data: RoomInput }))
+  .mutation(async ({ ctx, input }) => {
+    const isMember = await ctx.prisma.organizationMember.findFirst({
+      where: {
+        organization: { clerkOrgId: input.orgId },
+        user: { clerkId: ctx.auth.userId },
+      },
+    });
+    if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
 
-      return ctx.prisma.room.create({
-        data: {
-          orgId: input.orgId,
-          name: input.data.name,
-          kind: input.data.kind,
-          isPersistent: input.data.isPersistent,
-          capacity: input.data.capacity ?? null,
-          createdBy: ctx.auth.userId!,
-        },
-      });
-    }),
+    // 👇 call Daily API to create a unique RTC room
+    const dailyRoom = await createDailyRoom(
+      `${input.orgId}-${Date.now()}-${input.data.name.toLowerCase()}`
+    );
+
+    return ctx.prisma.room.create({
+      data: {
+        orgId: input.orgId,
+        name: input.data.name,
+        kind: input.data.kind,
+        isPersistent: input.data.isPersistent,
+        capacity: input.data.capacity ?? null,
+        createdBy: ctx.auth.userId!,
+        rtcProvider: "DAILY",
+        rtcRoomName: dailyRoom.name,
+        rtcRoomUrl: dailyRoom.url,
+      },
+    });
+  }),
 
   update: protectedProcedure
     .input(

@@ -17,6 +17,7 @@ import { CreateRoomDialog } from "./CreateRoomDialog";
 import { EditRoomDialog } from "@/components/dashboard/EditRoomDialog";
 import { CurrentRoomBar } from "@/components/dashboard/CurrentRoomBar";
 import { RoomSidebar } from "@/components/dashboard/RoomSidebar";
+import { useRouter } from "next/navigation";
 
 type Props = {
   initialRooms: RoomType[];
@@ -143,6 +144,7 @@ function RoomCard({
 
   const isActive = occupants.length > 0;
   const activeSessionQ = trpc.rooms.activeSession.useQuery({ roomId: room.id });
+  const router = useRouter();
 
   return (
     <Card className="p-4 space-y-3">
@@ -163,7 +165,10 @@ function RoomCard({
         <div className="flex items-center gap-2">
           <Button
             variant={isActive ? "secondary" : "default"}
-            onClick={() => joinRoom(room.id)}
+            onClick={() => {
+              joinRoom(room.id);
+              router.push(`/dashboard/office/room/${room.id}`); 
+            }}
           >
             {isActive ? "Join" : "Enter"}
           </Button>

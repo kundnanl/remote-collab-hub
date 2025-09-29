@@ -8,16 +8,16 @@ datasource db {
 }
 
 model User {
-  id                 String               @id @default(cuid())
-  clerkId            String               @unique
-  email              String               @unique
+  id                 String   @id @default(cuid())
+  clerkId            String   @unique
+  email              String   @unique
   name               String?
   imageUrl           String?
-  onboardingComplete Boolean              @default(false)
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  onboardingComplete Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  organizations      OrganizationMember[]
+  organizations OrganizationMember[]
 
   documents   Document[]   @relation("UserDocuments")
   permissions Permission[]
@@ -26,31 +26,31 @@ model User {
   roomSessions RoomSession[]
 
   // --- Task relations ---
-  tasksCreated Task[]        @relation("TaskCreator")
-  tasksAssigned Task[]       @relation("TaskAssignee")
+  tasksCreated  Task[] @relation("TaskCreator")
+  tasksAssigned Task[] @relation("TaskAssignee")
 
-  taskComments TaskComment[]
+  taskComments   TaskComment[]
   taskActivities TaskActivity[]
 }
 
 model Organization {
-  id         String               @id @default(cuid())
-  clerkOrgId String               @unique
+  id         String   @id @default(cuid())
+  clerkOrgId String   @unique
   name       String
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  members    OrganizationMember[]
-  Document   Document[]
+  members  OrganizationMember[]
+  Document Document[]
 
-  rooms      Room[]
+  rooms Room[]
 
   // --- Task-related back relations ---
-  boards     Board[]
-  sprints    Sprint[]
-  tasks      Task[]
-  taskRelations TaskRelation[]
-  taskComments TaskComment[]
+  boards         Board[]
+  sprints        Sprint[]
+  tasks          Task[]
+  taskRelations  TaskRelation[]
+  taskComments   TaskComment[]
   taskActivities TaskActivity[]
 }
 
@@ -64,15 +64,15 @@ model OrganizationMember {
 
   createdAt DateTime @default(now())
 
-  @@unique([userId, organizationId], name: "user_org_unique")
+  @@unique([userId, organizationId], name: "userId_organizationId")
 }
 
 model Document {
   id        String   @id @default(cuid())
   title     String
   content   Json
-  ownerId   String 
-  orgId     String 
+  ownerId   String
+  orgId     String
   isPublic  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -84,9 +84,9 @@ model Document {
 
 model Permission {
   id         String         @id @default(cuid())
-  userId     String 
+  userId     String
   documentId String
-  role       PermissionRole 
+  role       PermissionRole
 
   document Document @relation(fields: [documentId], references: [id])
   user     User     @relation(fields: [userId], references: [clerkId])
@@ -103,35 +103,74 @@ enum RoomKind {
 }
 
 model Room {
-  id           String    @id @default(cuid())
+  id           String       @id @default(cuid())
   orgId        String
   name         String
-  kind         RoomKind  @default(HUDDLE)
-  isPersistent Boolean   @default(true)
+  kind         RoomKind     @default(HUDDLE)
+  isPersistent Boolean      @default(true)
   capacity     Int?
-  createdBy    String    // User.clerkId
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdBy    String // User.clerkId
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  rtcProvider  RTCProvider  @default(DAILY)
+  rtcRoomName  String? // Daily room name (slug)
+  rtcRoomUrl   String? // Daily room URL (safe to show in UI)
+  // relations
+  recordings   Recording[]
+  whiteboards  Whiteboard[]
 
-  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
-  creator      User         @relation("RoomCreator", fields: [createdBy], references: [clerkId])
+  organization Organization  @relation(fields: [orgId], references: [clerkOrgId])
+  creator      User          @relation("RoomCreator", fields: [createdBy], references: [clerkId])
   sessions     RoomSession[]
 
-  @@index([orgId])
   @@unique([orgId, name], name: "org_room_name_unique")
+  @@index([orgId])
 }
 
 model RoomSession {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   roomId    String
-  startedBy String   // User.clerkId
-  startedAt DateTime @default(now())
+  startedBy String // User.clerkId
+  startedAt DateTime  @default(now())
   endedAt   DateTime?
 
   room Room @relation(fields: [roomId], references: [id])
   user User @relation(fields: [startedBy], references: [clerkId])
 
   @@index([roomId, startedAt])
+}
+
+model Recording {
+  id          String      @id @default(cuid())
+  roomId      String
+  provider    RTCProvider
+  kind        String
+  status      String
+  playbackUrl String?
+  sizeBytes   Int?
+  durationSec Int?
+  startedAt   DateTime    @default(now())
+  endedAt     DateTime?
+  Room        Room        @relation(fields: [roomId], references: [id])
+
+  @@index([roomId])
+}
+
+model Whiteboard {
+  id         String   @id @default(cuid())
+  roomId     String
+  provider   String   @default("liveblocks")
+  storageKey String
+  title      String   @default("Board")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  Room       Room     @relation(fields: [roomId], references: [id])
+
+  @@index([roomId])
+}
+
+enum RTCProvider {
+  DAILY
 }
 
 enum PermissionRole {
@@ -159,9 +198,9 @@ enum TaskPriority {
 }
 
 enum SprintStatus {
-  PLANNED   
-  ACTIVE    
-  CLOSED  
+  PLANNED
+  ACTIVE
+  CLOSED
 }
 
 enum TaskType {
@@ -191,13 +230,13 @@ enum TaskActivityType {
 }
 
 model Sprint {
-  id        String   @id @default(cuid())
-  orgId     String
-  name      String
-  goal      String? // optional sprint goal/description
-  startDate DateTime?
-  endDate   DateTime?
-  status    SprintStatus @default(PLANNED)
+  id             String       @id @default(cuid())
+  orgId          String
+  name           String
+  goal           String? // optional sprint goal/description
+  startDate      DateTime?
+  endDate        DateTime?
+  status         SprintStatus @default(PLANNED)
   velocityTarget Int?
 
   // relations
@@ -216,25 +255,25 @@ model Board {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization @relation(fields: [orgId], references: [clerkOrgId])
-  columns     BoardColumn[]
+  organization Organization  @relation(fields: [orgId], references: [clerkOrgId])
+  columns      BoardColumn[]
 
   @@unique([orgId, name])
 }
 
 model BoardColumn {
-  id        String     @id @default(cuid())
-  boardId   String
-  title     String
-  status    TaskStatus
-  wipLimit  Int?
-  position  Int        @default(0)
+  id       String     @id @default(cuid())
+  boardId  String
+  title    String
+  status   TaskStatus
+  wipLimit Int?
+  position Int        @default(0)
 
-  board Board @relation(fields: [boardId], references: [id])
+  board Board  @relation(fields: [boardId], references: [id])
   tasks Task[]
 
-  @@index([boardId, position])
   @@unique([boardId, status])
+  @@index([boardId, position])
 }
 
 // ===== Tasks =====
@@ -245,11 +284,11 @@ model Task {
   description String?
   priority    TaskPriority @default(MEDIUM)
   type        TaskType     @default(FEATURE)
-  position    Int          @default(0)  // ordering within a column
-  createdBy   String                     // User.clerkId
+  position    Int          @default(0) // ordering within a column
+  createdBy   String // User.clerkId
   assigneeId  String?
   sprintId    String?
-  columnId    String?                    // NEW: BoardColumn reference
+  columnId    String? // NEW: BoardColumn reference
   dueDate     DateTime?
   startDate   DateTime?
   estimate    Int?
@@ -258,13 +297,13 @@ model Task {
 
   organization Organization @relation(fields: [orgId], references: [clerkOrgId])
 
-  creator   User   @relation("TaskCreator", fields: [createdBy], references: [clerkId])
-  assignee  User?  @relation("TaskAssignee", fields: [assigneeId], references: [clerkId])
-  sprint    Sprint? @relation(fields: [sprintId], references: [id])
-  column    BoardColumn? @relation(fields: [columnId], references: [id])
+  creator  User         @relation("TaskCreator", fields: [createdBy], references: [clerkId])
+  assignee User?        @relation("TaskAssignee", fields: [assigneeId], references: [clerkId])
+  sprint   Sprint?      @relation(fields: [sprintId], references: [id])
+  column   BoardColumn? @relation(fields: [columnId], references: [id])
 
-  comments      TaskComment[]
-  activities    TaskActivity[]
+  comments          TaskComment[]
+  activities        TaskActivity[]
   outgoingRelations TaskRelation[] @relation("TaskOutgoing")
   incomingRelations TaskRelation[] @relation("TaskIncoming")
 
@@ -274,14 +313,14 @@ model Task {
 }
 
 model TaskRelation {
-  id    String            @id @default(cuid())
-  orgId String
+  id     String           @id @default(cuid())
+  orgId  String
   fromId String
   toId   String
-  type  TaskRelationType
+  type   TaskRelationType
 
-  from Task @relation("TaskOutgoing", fields: [fromId], references: [id])
-  to   Task @relation("TaskIncoming", fields: [toId], references: [id])
+  from         Task         @relation("TaskOutgoing", fields: [fromId], references: [id])
+  to           Task         @relation("TaskIncoming", fields: [toId], references: [id])
   organization Organization @relation(fields: [orgId], references: [clerkOrgId])
 
   @@unique([fromId, toId, type])
@@ -305,13 +344,13 @@ model TaskComment {
 }
 
 model TaskActivity {
-  id        String            @id @default(cuid())
+  id        String           @id @default(cuid())
   taskId    String
   orgId     String
   actorId   String
   type      TaskActivityType
   meta      Json?
-  createdAt DateTime          @default(now())
+  createdAt DateTime         @default(now())
 
   task         Task         @relation(fields: [taskId], references: [id])
   organization Organization @relation(fields: [orgId], references: [clerkOrgId])

@@ -7,6 +7,8 @@ import { createContext } from "@/server/context";
 import { boardsRouter } from "@/server/routes/boards";
 import { tasksRouter } from "@/server/routes/tasks";
 import { sprintsRouter } from "@/server/routes/sprints";
+import { rtcRouter } from "@/server/routes/rtc";
+
 
 export const appRouter = router({
   user: userRouter,
@@ -16,6 +18,7 @@ export const appRouter = router({
   boards: boardsRouter,
   tasks: tasksRouter,
   sprints: sprintsRouter,
+  rtc: rtcRouter,
 });
 
 export type AppRouter = typeof appRouter;
