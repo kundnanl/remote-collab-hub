@@ -3,6 +3,7 @@ import { ReactNode } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/server/db";
 import { redirect } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 export default async function DashboardLayout({
   children,
@@ -23,8 +24,14 @@ export default async function DashboardLayout({
   }
 
   return (
-    <main className="h-screen w-screen overflow-hidden">
-      {children}
-    </main>
-  );
+    <main className="min-h-screen">
+      <div
+        className={cn(
+          'max-w-7xl mx-auto px-6 md:px-10 py-8',
+          'flex flex-col gap-6'
+        )}
+      >
+        {children}
+      </div>
+    </main>  );
 }

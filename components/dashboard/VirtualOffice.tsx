@@ -100,8 +100,8 @@ function OfficeInner({
     <div className="space-y-6">
       <CurrentRoomBar />
       <div className="flex gap-6">
-        {/* Main content */}
-        <div className="flex-1 space-y-6">
+        {/* Main content - takes full width when sidebar is hidden */}
+        <div className="flex-1 lg:flex-initial lg:flex-grow space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-semibold">Virtual Office</h1>
             <CreateRoomDialog orgId={orgId} />
@@ -119,8 +119,8 @@ function OfficeInner({
           </div>
         </div>
 
-        {/* Sidebar */}
-        <div className="hidden lg:block w-72 shrink-0">
+        {/* Sidebar - completely removed from layout when hidden */}
+        <div className="hidden lg:block lg:w-72 lg:shrink-0">
           <RoomSidebar />
         </div>
       </div>
@@ -167,7 +167,7 @@ function RoomCard({
             variant={isActive ? "secondary" : "default"}
             onClick={() => {
               joinRoom(room.id);
-              router.push(`/dashboard/office/room/${room.id}`); 
+              router.push(`/dashboard/office/room/${room.id}`);
             }}
           >
             {isActive ? "Join" : "Enter"}

@@ -14,14 +14,10 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
-import { useOrganization } from "@clerk/nextjs";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const { organization } = useOrganization();
-
-  const orgId = organization?.id; // Clerk orgId
 
   const isDashboard = pathname?.startsWith("/dashboard") || pathname?.includes("/sprints");
 
@@ -36,10 +32,7 @@ export function Navbar() {
     { label: "Dashboard", href: "/dashboard" },
     { label: "Tasks", href: "/dashboard/tasks" },
     { label: "Docs", href: "/dashboard/docs" },
-    { label: "Meet", href: "/dashboard/meet" },
-        ...(orgId
-      ? [{ label: "Sprints", href: `/${orgId}/sprints` }]
-      : []), 
+    { label: "Office", href: "/dashboard/office" },
   ];
 
   const activeNav = isDashboard ? appNav : landingNav;

@@ -66,7 +66,6 @@ export function useYjsStore({
   };
 
   useEffect(() => {
-    // Reset status only when (re)connecting to a different provider/room
     setStoreWithStatus((prev) =>
       prev.status === "synced-remote" ? prev : { status: "loading" }
     );
@@ -214,7 +213,7 @@ export function useYjsStore({
     return () => {
       cleanupSubs();
     };
-  }, [yProvider, yDoc, yStore, room, store, user]);
+  }, [yProvider, yDoc, yStore, room, store, user?.id, user?.color, user?.name]);
 
   return storeWithStatus;
 }
