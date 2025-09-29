@@ -14,17 +14,15 @@ import { useYjsStore } from "@/components/whiteboard/useYjsStore";
 
 function YjsTldraw() {
   const me = useSelf((m) => m);
-  const user = useMemo(
-    () =>
-      me
-        ? {
-            id: me.id,
-            color: me.info?.color ?? "#6E6E6E",
-            name: me.info?.name ?? "Anonymous",
-          }
-        : null,
-    [me?.id, me?.info?.color, me?.info?.name]
-  );
+  const user = useMemo(() => {
+    if (!me || !me.id) return undefined;
+
+    return {
+      id: me.id,
+      color: typeof me.info?.color === "string" ? me.info.color : "#6E6E6E",
+      name: typeof me.info?.name === "string" ? me.info.name : "Anonymous",
+    };
+  }, [me]);
 
   const storeWithStatus = useYjsStore({ user: user ?? undefined });
 

@@ -12,10 +12,48 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { CalendarIcon, Trash2, Check, X, Save } from "lucide-react";
+import { CalendarIcon, Trash2, X, Save } from "lucide-react";
 import { TaskPriority, TaskType } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+
+// Type for the task data structure (matching Prisma schema)
+type Task = {
+    id: string;
+    orgId: string;
+    title: string;
+    description: string | null;
+    priority: TaskPriority;
+    type: TaskType;
+    position: number;
+    createdBy: string;
+    assigneeId: string | null;
+    sprintId: string | null;
+    columnId: string | null;
+    dueDate: string | null;
+    startDate: string | null;
+    estimate: number | null;
+    createdAt: Date;
+    updatedAt: Date;
+};
+
+type Activity = {
+    id: string;
+    type: string;
+    createdAt: string | Date;
+    actor?: {
+        name?: string | null;
+    } | null;
+};
+
+// Type for updatable fields only
+type UpdatableTaskFields = Pick<Task,
+    'title' | 'description' | 'type' | 'priority' | 'columnId' |
+    'sprintId' | 'assigneeId' | 'estimate' | 'dueDate' | 'position' | 'startDate'
+>;
+
+// Type for pending changes
+type PendingChanges = Partial<UpdatableTaskFields>;
 
 export default function TaskDetail({
     taskId,
@@ -42,11 +80,15 @@ export default function TaskDetail({
             await utils.tasks.byId.cancel({ taskId });
             const prev = utils.tasks.byId.getData({ taskId });
             if (prev) {
-                utils.tasks.byId.setData({ taskId }, { ...prev, ...vars.data } as any);
+                utils.tasks.byId.setData({ taskId }, { ...prev, ...vars.data });
             }
             return { prev };
         },
-        onError: (_e, _v, ctx) => ctx?.prev && utils.tasks.byId.setData({ taskId }, ctx.prev),
+        onError: (_error, _variables, context) => {
+            if (context?.prev) {
+                utils.tasks.byId.setData({ taskId }, context.prev);
+            }
+        },
         onSuccess: () => {
             // Reset pending changes after successful save
             setPendingChanges({});
@@ -77,24 +119,27 @@ export default function TaskDetail({
     const [comment, setComment] = React.useState("");
 
     // Track pending changes
-    const [pendingChanges, setPendingChanges] = React.useState<Record<string, any>>({});
+    const [pendingChanges, setPendingChanges] = React.useState<PendingChanges>({});
 
     // Helper to get current value (pending change or original)
-    const getCurrentValue = (field: string) => {
-        return pendingChanges.hasOwnProperty(field) ? pendingChanges[field] : (t as any)?.[field];
+    const getCurrentValue = <K extends keyof UpdatableTaskFields>(field: K): UpdatableTaskFields[K] | undefined => {
+        if (pendingChanges.hasOwnProperty(field)) {
+            return pendingChanges[field];
+        }
+        return t?.[field];
     };
 
     React.useEffect(() => {
-        if (t) {
+        if (t?.id) {
             setTitle(t.title);
             setDescription(t.description ?? "");
             setPendingChanges({}); // Reset pending changes when task loads
         }
-    }, [t?.id]); // reset when task changes
+    }, [t?.id, t?.title, t?.description]);
 
     const hasPendingChanges = Object.keys(pendingChanges).length > 0;
 
-    const handleFieldChange = (field: string, value: any) => {
+    const handleFieldChange = <K extends keyof PendingChanges>(field: K, value: PendingChanges[K]) => {
         setPendingChanges(prev => ({
             ...prev,
             [field]: value
@@ -123,7 +168,7 @@ export default function TaskDetail({
         if (t && value.trim() !== t.title) {
             handleFieldChange('title', value.trim());
         } else {
-            const { title: _, ...rest } = pendingChanges;
+            const { ...rest } = pendingChanges;
             setPendingChanges(rest);
         }
     };
@@ -134,14 +179,17 @@ export default function TaskDetail({
         if (t && newDesc !== t.description) {
             handleFieldChange('description', newDesc);
         } else {
-            const { description: _, ...rest } = pendingChanges;
+            const { ...rest } = pendingChanges;
             setPendingChanges(rest);
         }
     };
 
-    const handleSelectChange = (field: string, value: any) => {
-        const processedValue = value === "none" || value === "unassigned" ? null : value;
-        if (t && processedValue !== (t as any)[field]) {
+    const handleSelectChange = <K extends keyof UpdatableTaskFields>(
+        field: K,
+        value: string
+    ) => {
+        const processedValue = (value === "none" || value === "unassigned" ? null : value) as UpdatableTaskFields[K];
+        if (t && processedValue !== t[field]) {
             handleFieldChange(field, processedValue);
         }
     };
@@ -150,8 +198,8 @@ export default function TaskDetail({
         return <div className="p-6 text-sm text-muted-foreground">Loading task…</div>;
     }
 
-    const priorityOptions = [TaskPriority.LOW, TaskPriority.MEDIUM, TaskPriority.HIGH, TaskPriority.URGENT];
-    const typeOptions = [TaskType.FEATURE, TaskType.BUG, TaskType.CHORE, TaskType.DOCS];
+    const priorityOptions: TaskPriority[] = [TaskPriority.LOW, TaskPriority.MEDIUM, TaskPriority.HIGH, TaskPriority.URGENT];
+    const typeOptions: TaskType[] = [TaskType.FEATURE, TaskType.BUG, TaskType.CHORE, TaskType.DOCS];
 
     const assignees = meta?.assignees ?? [];
     const sprints = meta?.sprints ?? [];
@@ -233,7 +281,7 @@ export default function TaskDetail({
                 <Card className="p-4 space-y-3">
                     <div className="text-sm font-medium">Activity</div>
                     <div className="space-y-2 text-sm">
-                        {(activityQ.data ?? []).map((a) => (
+                        {(activityQ.data as unknown as Activity[] ?? []).map((a) => (
                             <div key={a.id} className="flex items-start gap-2">
                                 <div className="text-muted-foreground">
                                     {a.actor?.name ?? "Someone"} • {a.type.toLowerCase()} •{" "}
@@ -447,13 +495,13 @@ export default function TaskDetail({
                                 <PopoverTrigger asChild>
                                     <Button variant="outline" className="w-full justify-start">
                                         <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {getCurrentValue('dueDate') ? format(new Date(getCurrentValue('dueDate')), "PPP") : "Select date"}
+                                        {getCurrentValue('dueDate') ? format(new Date(getCurrentValue('dueDate')!), "PPP") : "Select date"}
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="p-0" align="start">
                                     <Calendar
                                         mode="single"
-                                        selected={getCurrentValue('dueDate') ? new Date(getCurrentValue('dueDate')) : undefined}
+                                        selected={getCurrentValue('dueDate') ? new Date(getCurrentValue('dueDate')!) : undefined}
                                         onSelect={(d) => {
                                             setDueOpen(false);
                                             handleFieldChange('dueDate', d ? d.toISOString() : null);

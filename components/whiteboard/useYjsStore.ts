@@ -18,6 +18,7 @@ import {
   TLRecord,
   TLStoreWithStatus,
 } from "tldraw";
+import type { JsonObject } from "@liveblocks/client";
 
 type UserInfo = {
   id: string;
@@ -59,7 +60,7 @@ export function useYjsStore({
     unsubsRef.current.forEach((fn) => {
       try {
         fn();
-      } catch {}
+      } catch { }
     });
     unsubsRef.current = [];
   };
@@ -93,7 +94,7 @@ export function useYjsStore({
         ({ changes }) => {
           yDoc.transact(() => {
             Object.values(changes.added).forEach((r) => yStore.set(r.id, r));
-            Object.values(changes.updated).forEach(([_, r]) => yStore.set(r.id, r));
+            Object.values(changes.updated).forEach(([, r]) => yStore.set(r.id, r));
             Object.values(changes.removed).forEach((r) => yStore.delete(r.id));
           });
         },
@@ -102,14 +103,17 @@ export function useYjsStore({
       unsubsRef.current.push(offTLListen);
 
       // Yjs -> TL
-      const handleChange = (changes: Map<string, any>, tx: Y.Transaction) => {
+      const handleChange = (
+        changes: Map<string, { action: "add" | "update" | "delete" }>,
+        tx: Y.Transaction) => {
         if (tx.local) return;
         const toPut: TLRecord[] = [];
         const toRemove: TLRecord["id"][] = [];
 
         changes.forEach((change, id) => {
-          if (change.action === "delete") toRemove.push(id);
-          else {
+          if (change.action === "delete") {
+            toRemove.push(id as TLRecord["id"]);
+          } else {
             const rec = yStore.get(id);
             if (rec) toPut.push(rec);
           }
@@ -132,9 +136,14 @@ export function useYjsStore({
         }));
 
         const self = room.getSelf();
-        // @ts-ignore liveblocks internal client id exposed on presence
-        const yClientId = self?.presence?.__yjs_clientid;
-        const presenceId = InstancePresenceRecordType.createId(yClientId);
+        const rawClientId = self?.presence?.__yjs_clientid;
+        const yClientIdStr =
+          typeof rawClientId === "string"
+            ? rawClientId
+            : rawClientId == null
+              ? undefined
+              : String(rawClientId);
+        const presenceId = InstancePresenceRecordType.createId(yClientIdStr);
 
         const presenceDerivation = createPresenceStateDerivation(
           userPreferences,
@@ -142,17 +151,21 @@ export function useYjsStore({
         )(store);
 
         // Initial presence
-        yProvider.awareness.setLocalStateField(
-          "presence",
-          presenceDerivation.get() ?? null
-        );
-
+        {
+          const presence = presenceDerivation.get() ?? null;
+          const presenceJson = presence
+            ? (JSON.parse(JSON.stringify(presence)) as JsonObject)
+            : null;
+          yProvider.awareness.setLocalStateField("presence", presenceJson);
+        }
         // Keep presence in sync without thrashing React state
         const disposePresenceReact = tlreact("presence-sync", () => {
           const presence = presenceDerivation.get() ?? null;
-          // schedule on next frame to batch updates
           requestAnimationFrame(() => {
-            yProvider.awareness.setLocalStateField("presence", presence);
+            const presenceJson = presence
+              ? (JSON.parse(JSON.stringify(presence)) as JsonObject)
+              : null;
+            yProvider.awareness.setLocalStateField("presence", presenceJson);
           });
         });
         unsubsRef.current.push(disposePresenceReact);
@@ -201,8 +214,7 @@ export function useYjsStore({
     return () => {
       cleanupSubs();
     };
-    // Only re-run when the provider/room or the *primitive* user fields change
-  }, [yProvider, yDoc, yStore, room, store, user?.id, user?.color, user?.name]);
+  }, [yProvider, yDoc, yStore, room, store, user]);
 
   return storeWithStatus;
 }

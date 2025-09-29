@@ -138,7 +138,7 @@ export function PresenceProvider({
       };
       ch.on("presence", { event: "sync" }, sync);
     },
-    [orgId, endActive, startOrGet]
+    [orgId, endActive, startOrGet, push, roomMembers]
   );
 
   const setStatus = async (status: OrgPresenceState["status"]) => {

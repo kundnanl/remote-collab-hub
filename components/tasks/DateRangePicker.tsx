@@ -7,7 +7,6 @@ import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
-import { cn } from "@/lib/utils";
 
 export function DateRangePicker({
     value,

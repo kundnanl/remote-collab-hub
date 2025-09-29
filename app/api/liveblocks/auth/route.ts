@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { room } = await req.json().catch(() => ({} as any));
+  const { room } = await req.json().catch(() => ({}));
   if (!room || typeof room !== "string") {
     return new Response("Bad Request", { status: 400 });
   }

@@ -5,6 +5,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { RouterOutputs } from "@/server/client";
 import { Badge } from "@/components/ui/badge";
 import { GripVertical } from "lucide-react";
+import type { DraggableAttributes } from "@dnd-kit/core";
+import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 
 type Task = RouterOutputs["tasks"]["list"][number];
 
@@ -28,8 +30,8 @@ export default function TaskCard({
   onClick?: (id: string) => void;
   disableClick?: boolean;
   dragHandleProps?: {
-    attributes: Record<string, unknown>;
-    listeners: Record<string, unknown>;
+    attributes: DraggableAttributes;
+    listeners: SyntheticListenerMap | undefined;
   };
 }) {
   const pClass = priorityColor[task.priority] ?? "bg-muted";
@@ -49,8 +51,8 @@ export default function TaskCard({
         <div 
           data-drag-handle
           className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded hover:bg-muted/80 text-muted-foreground cursor-grab active:cursor-grabbing flex-shrink-0"
-          {...(dragHandleProps?.attributes as object)}
-          {...(dragHandleProps?.listeners as object)}
+          {...dragHandleProps?.attributes}
+          {...dragHandleProps?.listeners}
         >
           <GripVertical className="h-4 w-4" />
         </div>

@@ -2,15 +2,12 @@
 
 import * as React from "react";
 import { trpc } from "@/server/client";
-import type { RouterOutputs } from "@/server/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Plus } from "lucide-react";
 import { SprintDialog } from "./SprintDialog";
-
-type Sprint = RouterOutputs["sprints"]["list"][number];
 
 export function SprintList({ orgId }: { orgId: string }) {
   const utils = trpc.useUtils();

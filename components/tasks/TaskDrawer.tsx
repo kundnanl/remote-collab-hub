@@ -8,7 +8,6 @@ import TaskDetail from "./TaskDetail";
 
 export default function TaskDrawer({
   taskId,
-  orgId,
   open,
   onOpenChange,
 }: {

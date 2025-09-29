@@ -32,7 +32,7 @@ export function NewTaskDialog({
   small?: boolean;
 }) {
   const utils = trpc.useUtils();
-  const boardQ = trpc.boards.getDefault.useQuery({ orgId }); // load columns
+  const boardQ = trpc.boards.getDefault.useQuery({ orgId });
 
   const [open, setOpen] = React.useState(false);
   const [title, setTitle] = React.useState("");
@@ -107,7 +107,7 @@ export function NewTaskDialog({
               <label className="text-sm font-medium">Priority</label>
               <Select
                 value={priority}
-                onValueChange={(v) => setPriority(v as any)}
+                onValueChange={(v) => setPriority(v as "LOW" | "MEDIUM" | "HIGH" | "URGENT")}
               >
                 <SelectTrigger><SelectValue placeholder="Priority" /></SelectTrigger>
                 <SelectContent>
@@ -124,7 +124,7 @@ export function NewTaskDialog({
               <label className="text-sm font-medium">Type</label>
               <Select
                 value={type}
-                onValueChange={(v) => setType(v as any)}
+                onValueChange={(v) => setType(v as "FEATURE" | "BUG" | "CHORE" | "DOCS")}
               >
                 <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
                 <SelectContent>
@@ -157,6 +157,6 @@ export function NewTaskDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   );
 }

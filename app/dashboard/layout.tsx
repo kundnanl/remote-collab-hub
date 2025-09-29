@@ -1,6 +1,5 @@
 // dashboard/layout.tsx
 import { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/server/db";
 import { redirect } from "next/navigation";

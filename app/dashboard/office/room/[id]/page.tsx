@@ -25,20 +25,12 @@ export default function OfficeRoomPage({
         let currentCall: DailyCall | null = null;
 
         async function joinCall() {
-            // Prevent duplicate initialization
-            if (isInitialized || callRef.current) {
-                console.log("Daily call already initialized, skipping");
-                return;
-            }
+            if (isInitialized || callRef.current) return;
 
             try {
                 const { token, url } = await tokenMutation.mutateAsync({ roomId: id });
 
-                // Check again after async operation
-                if (aborted || callRef.current) {
-                    console.log("Call creation aborted or already exists");
-                    return;
-                }
+                if (aborted || callRef.current) return;
 
                 const parent = containerRef.current ?? document.body;
                 const call = DailyIframe.createFrame(parent, {
@@ -54,12 +46,8 @@ export default function OfficeRoomPage({
                 callRef.current = call;
                 setIsInitialized(true);
 
-                // Add event listeners
                 call.on("left-meeting", () => {
-                    console.log("Left meeting");
-                    if (!aborted) {
-                        router.push("/dashboard/office");
-                    }
+                    if (!aborted) router.push("/dashboard/office");
                 });
 
                 call.on("error", (error) => {
@@ -70,9 +58,7 @@ export default function OfficeRoomPage({
             } catch (err) {
                 console.error("Failed to join call:", err);
                 setIsInitialized(false);
-                if (!aborted) {
-                    router.push("/dashboard/office");
-                }
+                if (!aborted) router.push("/dashboard/office");
             }
         }
 
@@ -81,17 +67,14 @@ export default function OfficeRoomPage({
         return () => {
             aborted = true;
 
-            // Cleanup function
             const cleanup = async () => {
                 if (currentCall || callRef.current) {
                     const call = currentCall || callRef.current;
+                    if (!call) return; 
                     try {
-                        // Leave the meeting before destroying
                         if (call.meetingState() !== "left-meeting") {
                             await call.leave();
                         }
-                    } catch (err) {
-                        console.error("Error leaving call:", err);
                     } finally {
                         call.destroy();
                         callRef.current = null;
@@ -102,7 +85,7 @@ export default function OfficeRoomPage({
 
             cleanup();
         };
-    }, [id]);
+    }, [id, isInitialized, router, tokenMutation]); 
 
     return (
         <div className="h-screen w-screen flex flex-col">
