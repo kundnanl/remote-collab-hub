@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { useState } from "react";
 import { SimpleToastProvider } from "@/components/ui/simple-toast";
-import { LiveblocksProvider } from "@liveblocks/react";
 
 export default function Provider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
@@ -23,11 +22,7 @@ export default function Provider({ children }: { children: React.ReactNode }) {
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <SimpleToastProvider>
-        <LiveblocksProvider
-          publicApiKey={process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY!}
-        >
           {children}
-        </LiveblocksProvider>
           </SimpleToastProvider>
       </QueryClientProvider>
     </trpc.Provider>
