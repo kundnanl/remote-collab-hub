@@ -27,14 +27,13 @@ export default function OfficeRoomPage({
     let currentCall: DailyCall | null = null;
 
     async function joinCall() {
-      if (isInitialized || callRef.current) {
-        return;
-      }
+      if (isInitialized || callRef.current) return;
 
       try {
-        // presence join
+        console.log('[OfficeRoomPage] joinCall -> presence join', id)
         await joinRoom(id);
 
+        console.log('[OfficeRoomPage] fetching token/url')
         const { token, url } = await tokenMutation.mutateAsync({ roomId: id });
         if (aborted || callRef.current) return;
 
@@ -49,6 +48,7 @@ export default function OfficeRoomPage({
         setIsInitialized(true);
 
         call.on("left-meeting", async () => {
+          console.log('[OfficeRoomPage] left-meeting')
           if (!aborted) {
             await leaveRoom();
             router.push("/dashboard/office");
@@ -56,12 +56,13 @@ export default function OfficeRoomPage({
         });
 
         call.on("error", (error) => {
-          console.error("Daily call error:", error);
+          console.error("[OfficeRoomPage] Daily error:", error);
         });
 
+        console.log('[OfficeRoomPage] joining daily', { url })
         await call.join({ url, token });
       } catch (err) {
-        console.error("Failed to join call:", err);
+        console.error("[OfficeRoomPage] Failed to join call:", err);
         setIsInitialized(false);
         if (!aborted) {
           await leaveRoom();
@@ -72,37 +73,41 @@ export default function OfficeRoomPage({
 
     joinCall();
 
-return () => {
-  aborted = true;
+    return () => {
+      aborted = true;
+      console.log('[OfficeRoomPage] cleanup useEffect');
+      const cleanup = async () => {
+        const call = currentCall || callRef.current;
+        currentCall = null;
+        callRef.current = null;
 
-  const cleanup = async () => {
-    const call = currentCall || callRef.current;
-    currentCall = null;
-    callRef.current = null;
-
-    if (call) {
-      try {
-        if (call.meetingState() !== "left-meeting") {
-          await call.leave();
+        if (call) {
+          try {
+            if (call.meetingState && call.meetingState() !== "left-meeting") {
+              console.log('[OfficeRoomPage] leaving daily')
+              await call.leave();
+            }
+          } catch (err) {
+            console.warn("[OfficeRoomPage] Error leaving Daily:", err);
+          } finally {
+            try {
+              call.destroy?.();
+              console.log('[OfficeRoomPage] destroyed daily frame')
+            } catch (err) {
+              console.warn("[OfficeRoomPage] Error destroying Daily:", err);
+            }
+          }
         }
-      } catch (err) {
-        console.warn("Error leaving Daily call:", err);
-      } finally {
-        try {
-          call.destroy();
-        } catch (err) {
-          console.warn("Error destroying Daily call:", err);
-        }
-      }
-    }
 
-    await leaveRoom();
-  };
+        await leaveRoom();
+      };
 
-  cleanup();
-};
-    // 👇 Only re-run when the room id changes
-  }, [id]); 
+      // No await in React cleanup; fire and forget
+      void cleanup();
+    };
+  // only on id changes (intentional)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   return (
     <div style={{ height: "100dvh", display: "grid" }}>

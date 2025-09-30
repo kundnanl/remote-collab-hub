@@ -26,28 +26,50 @@ export const usePresence = () => {
   return ctx;
 };
 
-/** Supabase presence state looks like: { [key: string]: Meta[] }, Meta.payload = your payload */
-type PresenceMeta = { payload?: any } & Record<string, any>;
-type PresenceStateRaw = Record<string, PresenceMeta[]>;
+type PresencePayload = {
+  userId?: string;
+  name?: string | null;
+  imageUrl?: string | null;
+  orgId?: string;
+  roomId?: string | null;
+  status?: "online" | "focus" | "dnd";
+  muted?: boolean;
+  handRaised?: boolean;
+  [key: string]: unknown;
+};
 
-function presenceToMap(state: PresenceStateRaw): Map<string, OrgPresenceState> {
+type PresenceMeta = {
+  payload?: PresencePayload;
+  [key: string]: unknown;
+};
+
+function presenceToMap(raw: unknown): Map<string, OrgPresenceState> {
   const map = new Map<string, OrgPresenceState>();
-  for (const [key, metas] of Object.entries(state)) {
-    if (!metas || metas.length === 0) continue;
+
+  const state = raw as Record<string, { metas?: PresenceMeta[] } | PresenceMeta[] | undefined>;
+
+  for (const [key, obj] of Object.entries(state)) {
+    // Supabase’s type says it's an array, but internally it's actually { metas: […] }
+    const metas: PresenceMeta[] =
+      Array.isArray(obj) ? (obj as PresenceMeta[]) : (obj?.metas ?? []);
+
+    if (!metas.length) continue;
     const meta = metas[metas.length - 1]; // last meta wins
-    const payload = (meta && meta.payload) ? meta.payload : {};
+    const payload = meta?.payload ?? {};
+
     const user: OrgPresenceState = {
       userId: payload.userId ?? key,
       name: payload.name ?? null,
       imageUrl: payload.imageUrl ?? null,
-      orgId: payload.orgId,
+      orgId: (payload.orgId as string) ?? "",
       roomId: payload.roomId ?? null,
-      status: payload.status ?? 'online',
+      status: payload.status ?? "online",
       muted: payload.muted ?? false,
       handRaised: payload.handRaised ?? false,
     };
     map.set(user.userId, user);
   }
+
   return map;
 }
 
@@ -78,22 +100,31 @@ export function PresenceProvider({
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
+    // eslint-disable-next-line no-console
+    console.log('[PresenceProvider] mount org', { orgId, me: initialMe })
+    return () => {
+      mountedRef.current = false;
+      // eslint-disable-next-line no-console
+      console.log('[PresenceProvider] unmount')
+    };
+  }, [orgId, initialMe]);
 
   // ---------- org presence sync ----------
   const applyOrgPresence = useCallback(() => {
     if (!orgChannelRef.current) return;
-    const state = orgChannelRef.current.presenceState() as PresenceStateRaw;
+    const raw = orgChannelRef.current.presenceState();
+    const map = presenceToMap(raw);
     if (!mountedRef.current) return;
-    setOrgMembers(presenceToMap(state));
+    setOrgMembers(map);
+    // eslint-disable-next-line no-console
+    console.debug('[PresenceProvider] org presence applied', { count: map.size, map })
   }, []);
 
   // ---------- room presence sync ----------
   const applyRoomPresence = useCallback(async (roomId: string) => {
     if (!roomChannelRef.current) return;
-    const state = roomChannelRef.current.presenceState() as PresenceStateRaw;
-    const next = presenceToMap(state);
+    const raw = roomChannelRef.current.presenceState();
+    const next = presenceToMap(raw);
 
     if (!mountedRef.current) return;
 
@@ -101,16 +132,23 @@ export function PresenceProvider({
       const prevCount = prev.size;
       const nextCount = next.size;
 
+      // eslint-disable-next-line no-console
+      console.debug('[PresenceProvider] room presence applied', { roomId, prevCount, nextCount, next })
+
       // Start session: 0 → 1+
       if (prevCount === 0 && nextCount >= 1) {
-        startOrGet.mutateAsync({ roomId }).catch(() => { });
+        startOrGet.mutateAsync({ roomId })
+          .then(res => console.log('[PresenceProvider] startOrGet ok', { roomId, res }))
+          .catch(err => console.warn('[PresenceProvider] startOrGet failed', err));
       }
 
       // End session: 1+ → 0 (with grace period)
       if (prevCount > 0 && nextCount === 0) {
         if (endTimerRef.current) clearTimeout(endTimerRef.current);
         endTimerRef.current = setTimeout(() => {
-          endActive.mutateAsync({ roomId }).catch(() => { });
+          endActive.mutateAsync({ roomId })
+            .then(res => console.log('[PresenceProvider] endActive ok', { roomId, res }))
+            .catch(err => console.warn('[PresenceProvider] endActive failed', err));
         }, 5000);
       }
 
@@ -142,11 +180,17 @@ export function PresenceProvider({
     const ch = joinOrgPresence(orgId, initialState);
     orgChannelRef.current = ch;
 
-    ch.on("presence", { event: "sync" }, applyOrgPresence);
-    ch.on("presence", { event: "join" }, applyOrgPresence);
-    ch.on("presence", { event: "leave" }, applyOrgPresence);
+    const onSync = () => applyOrgPresence();
+    const onJoin = () => applyOrgPresence();
+    const onLeave = () => applyOrgPresence();
+
+    ch.on("presence", { event: "sync" }, onSync);
+    ch.on("presence", { event: "join" }, onJoin);
+    ch.on("presence", { event: "leave" }, onLeave);
 
     return () => {
+      // eslint-disable-next-line no-console
+      console.log('[PresenceProvider] cleanup org channel')
       ch.unsubscribe();
       orgChannelRef.current = null;
       setOrgMembers(new Map());
@@ -158,6 +202,9 @@ export function PresenceProvider({
     const channel = roomChannelRef.current;
     const roomId = currentRoomId;
 
+    // eslint-disable-next-line no-console
+    console.log('[PresenceProvider] leaveRoom called', { roomId })
+
     if (!channel || !roomId) {
       setRoomMembers(new Map());
       setCurrentRoomId(null);
@@ -166,7 +213,12 @@ export function PresenceProvider({
 
     // If last person, close session immediately
     if (roomMembers.size === 1) {
-      try { await endActive.mutateAsync({ roomId }); } catch { }
+      try {
+        const res = await endActive.mutateAsync({ roomId })
+        console.log('[PresenceProvider] endActive on single', { roomId, res })
+      } catch (e) {
+        console.warn('[PresenceProvider] endActive error', e)
+      }
     }
 
     await channel.unsubscribe();
@@ -183,12 +235,18 @@ export function PresenceProvider({
     setMe(updatedMe);
     if (orgChannelRef.current) {
       await orgChannelRef.current.track(updatedMe);
+      console.debug('[PresenceProvider] org track after leave', updatedMe)
     }
   }, [currentRoomId, endActive, me, roomMembers.size]);
 
   const handleUnload = useCallback(async () => {
     if (roomMembers.size === 1 && currentRoomId) {
-      try { await endActive.mutateAsync({ roomId: currentRoomId }); } catch { }
+      try {
+        const res = await endActive.mutateAsync({ roomId: currentRoomId })
+        console.log('[PresenceProvider] handleUnload endActive', { roomId: currentRoomId, res })
+      } catch (e) {
+        console.warn('[PresenceProvider] handleUnload error', e)
+      }
     }
   }, [roomMembers.size, currentRoomId, endActive]);
 
@@ -214,6 +272,7 @@ export function PresenceProvider({
 
     if (orgChannelRef.current) {
       await orgChannelRef.current.track(updatedMe);
+      console.debug('[PresenceProvider] org track after join', updatedMe)
     }
 
     if (!roomId) return;
@@ -221,16 +280,23 @@ export function PresenceProvider({
     const ch = joinRoomPresence(orgId, roomId, updatedMe);
     roomChannelRef.current = ch;
 
-    ch.on("presence", { event: "sync" }, () => applyRoomPresence(roomId));
-    ch.on("presence", { event: "join" }, () => applyRoomPresence(roomId));
-    ch.on("presence", { event: "leave" }, () => applyRoomPresence(roomId));
+    const onSync = () => applyRoomPresence(roomId);
+    const onJoin = () => applyRoomPresence(roomId);
+    const onLeave = () => applyRoomPresence(roomId);
+
+    ch.on("presence", { event: "sync" }, onSync);
+    ch.on("presence", { event: "join" }, onJoin);
+    ch.on("presence", { event: "leave" }, onLeave);
 
     // Initial sync (slight delay so state is populated)
-    setTimeout(() => applyRoomPresence(roomId), 120);
+    setTimeout(onSync, 150);
 
-    // attach global handlers
+    // attach global handlers (idempotent because we clean on leave)
     window.addEventListener("beforeunload", handleUnload);
     document.addEventListener("visibilitychange", handleVisibility);
+
+    // eslint-disable-next-line no-console
+    console.log('[PresenceProvider] joined room', { roomId })
   }, [applyRoomPresence, currentRoomId, leaveRoom, orgId, me, handleUnload, handleVisibility]);
 
   // ---------- set status ----------
@@ -240,9 +306,11 @@ export function PresenceProvider({
 
     if (orgChannelRef.current) {
       await orgChannelRef.current.track(updatedMe);
+      console.debug('[PresenceProvider] org track status', updatedMe)
     }
     if (roomChannelRef.current) {
       await roomChannelRef.current.track(updatedMe);
+      console.debug('[PresenceProvider] room track status', updatedMe)
     }
   }, [me]);
 
@@ -251,16 +319,23 @@ export function PresenceProvider({
     const channel = supabase
       .channel("connection-monitor")
       .on("system", { event: "recovered" }, async () => {
+        console.log('[PresenceProvider] realtime recovered, retracking')
         if (orgChannelRef.current) await orgChannelRef.current.track(me);
         if (roomChannelRef.current) await roomChannelRef.current.track(me);
       })
       .on("system", { event: "reconnect" }, async () => {
+        console.log('[PresenceProvider] realtime reconnect, retracking')
         if (orgChannelRef.current) await orgChannelRef.current.track(me);
         if (roomChannelRef.current) await roomChannelRef.current.track(me);
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[PresenceProvider] connection-monitor status', status)
+      });
 
-    return () => { channel.unsubscribe(); };
+    return () => {
+      console.log('[PresenceProvider] connection-monitor unsubscribe')
+      channel.unsubscribe();
+    };
   }, [me]);
 
   const value = useMemo<Ctx>(() => ({

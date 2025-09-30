@@ -2,13 +2,14 @@
 import { usePresence } from '@/components/presence/PresenceProvider'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
-type Status = 'online' | 'away' | 'dnd'
-
 export function StatusMenu() {
   const { me, setStatus } = usePresence()
 
   return (
-    <Select defaultValue={me.status} onValueChange={(v: Status) => setStatus(v)}>
+    <Select 
+      defaultValue={me.status} 
+      onValueChange={(v) => setStatus(v as Parameters<typeof setStatus>[0])}
+    >
       <SelectTrigger className="w-[140px]">
         <SelectValue placeholder="Set status" />
       </SelectTrigger>

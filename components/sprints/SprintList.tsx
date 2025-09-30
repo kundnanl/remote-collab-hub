@@ -30,7 +30,7 @@ export function SprintList({ orgId }: { orgId: string }) {
     },
   });
 
-  const close = trpc.sprints.close.useMutation({
+  const complete = trpc.sprints.complete.useMutation({
     onMutate: async (vars) => {
       await utils.sprints.list.cancel({ orgId });
       const prev = utils.sprints.list.getData({ orgId });
@@ -76,8 +76,8 @@ export function SprintList({ orgId }: { orgId: string }) {
                   s.status === "ACTIVE"
                     ? "default"
                     : s.status === "CLOSED"
-                    ? "secondary"
-                    : "outline"
+                      ? "secondary"
+                      : "outline"
                 }
               >
                 {s.status.toLowerCase()}
@@ -97,7 +97,7 @@ export function SprintList({ orgId }: { orgId: string }) {
                 <Button
                   size="sm"
                   variant="destructive"
-                  onClick={() => close.mutate({ sprintId: s.id, orgId })}
+                  onClick={() => complete.mutate({ sprintId: s.id, orgId })}
                 >
                   Close
                 </Button>

@@ -16,9 +16,8 @@ import {
   useDroppable, MouseSensor, TouchSensor, useSensor, useSensors,
 } from "@dnd-kit/core";
 import {
-  SortableContext, verticalListSortingStrategy, useSortable, defaultAnimateLayoutChanges,
+  SortableContext, verticalListSortingStrategy
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CalendarIcon, Play, CheckCheck, Pencil } from "lucide-react";
@@ -120,6 +119,8 @@ export default function Backlog({
   const tasksQ = trpc.tasks.list.useQuery({ orgId }, { initialData: initialTasks, refetchOnWindowFocus: false });
   const metaQ = trpc.tasks.orgMeta.useQuery({ orgId });
 
+  const [sprintDialogOpen, setSprintDialogOpen] = useState(false);
+
   // sensors → row-wide drag, click still works
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -132,7 +133,7 @@ export default function Backlog({
     (sprintsQ.data ?? []).forEach(s => map.set(s.id, []));
     map.set(BACKLOG_ID, []);
     (tasksQ.data ?? []).forEach(t => map.get(t.sprintId ?? BACKLOG_ID)!.push(t));
-    for (const [k, arr] of map) arr.sort((a, b) => a.position - b.position || +new Date(a.createdAt) - +new Date(b.createdAt));
+    for (const [, arr] of map) arr.sort((a, b) => a.position - b.position || +new Date(a.createdAt) - +new Date(b.createdAt));
     return map;
   }, [sprintsQ.data, tasksQ.data]);
 
@@ -140,7 +141,15 @@ export default function Backlog({
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [selectedSprints, setSelectedSprints] = useState<Set<string>>(new Set());
   const toggleTaskSel = (id: string, on: boolean) =>
-    setSelectedTasks(prev => { const n = new Set(prev); on ? n.add(id) : n.delete(id); return n; });
+    setSelectedTasks(prev => {
+      const n = new Set(prev);
+      if (on) {
+        n.add(id);
+      } else {
+        n.delete(id);
+      }
+      return n;
+    });
 
   // mutations
   const moveToSprint = trpc.tasks.moveToSprint.useMutation({
@@ -184,12 +193,23 @@ export default function Backlog({
     const list = tasksBySprint.get(sprintId) ?? [];
     setSelectedTasks(prev => {
       const n = new Set(prev);
-      for (const t of list) on ? n.add(t.id) : n.delete(t.id);
+      for (const t of list) {
+        if (on) {
+          n.add(t.id);
+        } else {
+          n.delete(t.id);
+        }
+      }
       return n;
     });
     setSelectedSprints(prev => {
       const n = new Set(prev);
-      on ? n.add(sprintId) : n.delete(sprintId);
+      if (on) {
+        n.add(sprintId)
+      }
+      else {
+        n.delete(sprintId)
+      }
       return n;
     });
   };
@@ -254,7 +274,7 @@ export default function Backlog({
               <DropdownMenuContent align="start">
                 {["LOW", "MEDIUM", "HIGH", "URGENT"].map(p => (
                   <DropdownMenuItem key={p}
-                    onClick={() => bulkUpdate.mutate({ orgId, taskIds: [...selectedTasks], data: { priority: p as any } })}
+                    onClick={() => bulkUpdate.mutate({ orgId, taskIds: [...selectedTasks], data: { priority: p as "LOW" | "MEDIUM" | "HIGH" | "URGENT" } })}
                   >{p.toLowerCase()}</DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -303,7 +323,11 @@ export default function Backlog({
           <h1 className="text-2xl font-semibold">Backlog</h1>
         </div>
         <div className="flex items-center gap-2">
-          <SprintCreateDialog orgId={orgId} />
+          <SprintCreateDialog
+            orgId={orgId}
+            open={sprintDialogOpen}
+            setOpen={setSprintDialogOpen}
+          />
           <NewTaskDialog orgId={orgId} defaultSprintId={null} small />
         </div>
       </div>
@@ -321,10 +345,10 @@ export default function Backlog({
                     <SprintHeader
                       sprint={s}
                       selected={selectedSprints.has(s.id)}
-                      onToggleSelect={(on) => setSprintSelected(s.id, on)}                  
-                      onStart={() => {/* your existing start */ }}
-                      onComplete={() => {/* your existing complete */ }}
-                      onRename={(name) => updateSprint.mutate({ orgId, sprintId: s.id, name })} 
+                      onToggleSelect={(on) => setSprintSelected(s.id, on)}
+                      onStart={() => { }}
+                      onComplete={() => { }}
+                      onRename={(name) => updateSprint.mutate({ orgId, sprintId: s.id, name })}
                     />
 
                     <div className="mt-3">
@@ -367,7 +391,7 @@ export default function Backlog({
                 <SprintHeader
                   sprint={s}
                   selected={selectedSprints.has(s.id)}
-                  onToggleSelect={(on) => setSelectedSprints(prev => { const n = new Set(prev); on ? n.add(s.id) : n.delete(s.id); return n; })}
+                  onToggleSelect={(on) => setSelectedSprints(prev => { const n = new Set(prev); if (on) { n.add(s.id) } else { n.delete(s.id) } return n; })}
                   onStart={() => { }}
                   onComplete={() => { }}
                   onRename={(name) => updateSprint.mutate({ orgId, sprintId: s.id, name })}
@@ -385,7 +409,7 @@ export default function Backlog({
                             selected={selectedTasks.has(t.id)}
                             onToggleSelect={(on) => toggleTaskSel(t.id, on)}
                             onOpen={openTask}
-                            dragHandleProps={/* @ts-ignore */{}}
+                            dragHandleProps={{}}
                             recentlyChanged={t.id === lastChangedId}
                           />
                         ))}
@@ -420,7 +444,7 @@ export default function Backlog({
                       selected={selectedTasks.has(t.id)}
                       onToggleSelect={(on) => toggleTaskSel(t.id, on)}
                       onOpen={openTask}
-                      dragHandleProps={/* @ts-ignore */{}}
+                      dragHandleProps={{}}
                       recentlyChanged={t.id === lastChangedId}
                     />
                   ))}

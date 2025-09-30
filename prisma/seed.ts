@@ -8,11 +8,10 @@ async function ensureDefaultBoardForOrg(orgId: string) {
     board = await prisma.board.create({ data: { orgId, name: "Default" } });
   }
   const defaults: { title: string; status: TaskStatus; position: number }[] = [
-    { title: "Backlog",      status: "BACKLOG",     position: 0 },
-    { title: "To do",        status: "TODO",        position: 1 },
-    { title: "In progress",  status: "IN_PROGRESS", position: 2 },
-    { title: "Review",       status: "REVIEW",      position: 3 },
-    { title: "Done",         status: "DONE",        position: 4 },
+    { title: "To do",        status: "TODO",        position: 0 },
+    { title: "In progress",  status: "IN_PROGRESS", position: 1 },
+    { title: "Review",       status: "REVIEW",      position: 2 },
+    { title: "Done",         status: "DONE",        position: 3 },
   ];
   for (const col of defaults) {
     const exists = await prisma.boardColumn.findFirst({

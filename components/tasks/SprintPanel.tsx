@@ -40,7 +40,7 @@ export function SprintPanel({
     },
   });
 
-  const close = trpc.sprints.close.useMutation({
+  const close = trpc.sprints.complete.useMutation({
     onMutate: async (vars) => {
       await utils.sprints.list.cancel({ orgId });
       const prev = utils.sprints.list.getData({ orgId });

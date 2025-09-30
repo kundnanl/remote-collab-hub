@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import Link from "next/link";
 
@@ -51,9 +51,7 @@ function useSuccessFlash(ms = 800) {
 function SectionCard({
   children,
   flash,
-  className,
 }: { children: React.ReactNode; flash?: boolean; className?: string }) {
-  const reduce = useReducedMotion();
   return (
     <motion.div
       layout
@@ -192,6 +190,12 @@ export default function TaskDetail({
   const setEstimate = (estimate: number | null) => update.mutate({ taskId, data: { estimate } });
   const setDueDate = (iso: string | null) => update.mutate({ taskId, data: { dueDate: iso } });
 
+  const activities = (activityQ.data ?? []) as Array<{
+    id: string;
+    actor: { name?: string | null } | null;
+    type: string;
+    createdAt: string | Date;
+  }>;
   /* ------------------------------- UI -------------------------------- */
 
   return (
@@ -306,7 +310,7 @@ export default function TaskDetail({
           <div className="text-sm font-medium">Activity</div>
           <div className="space-y-2 text-sm">
             <AnimatePresence initial={false}>
-              {(activityQ.data ?? []).map((a) => (
+              {activities.map((a) => (
                 <motion.div
                   key={a.id}
                   initial={{ opacity: 0, y: 4 }}

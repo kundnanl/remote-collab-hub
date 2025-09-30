@@ -40,11 +40,10 @@ export const boardsRouter = router({
       }
 
       const defaults: { title: string; status: TaskStatus; position: number }[] = [
-        { title: "Backlog", status: TaskStatus.BACKLOG, position: 0 },
-        { title: "To do", status: TaskStatus.TODO, position: 1 },
-        { title: "In progress", status: TaskStatus.IN_PROGRESS, position: 2 },
-        { title: "Review", status: TaskStatus.REVIEW, position: 3 },
-        { title: "Done", status: TaskStatus.DONE, position: 4 },
+        { title: "To do", status: TaskStatus.TODO, position: 0 },
+        { title: "In progress", status: TaskStatus.IN_PROGRESS, position: 1 },
+        { title: "Review", status: TaskStatus.REVIEW, position: 2 },
+        { title: "Done", status: TaskStatus.DONE, position: 3 },
       ];
 
       for (const col of defaults) {

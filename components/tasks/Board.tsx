@@ -96,7 +96,7 @@ function TaskCardLite({
 }: {
   task: Task;
   onClick?: (id: string) => void;
-  dragHandleProps?: any;
+  dragHandleProps?: Record<string, unknown>;
   disabled?: boolean;
 }) {
   return (

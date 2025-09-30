@@ -5,16 +5,23 @@ import Backlog from "@/components/tasks/Backlog";
 import Board from "@/components/tasks/Board";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
+type SearchParams = Record<string, string | string[] | undefined>;
+
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams?: { tab?: string };
+  searchParams?: Promise<SearchParams>;
 }) {
+  // Await searchParams before using it
+  const resolvedParams = await searchParams;
+  const tabParam = resolvedParams?.tab;
+  const tab = tabParam === "board" ? "board" : "backlog";
+
   const { userId, orgId } = await auth();
   if (!userId || !orgId) redirect("/");
 
   const caller = await createCaller();
-
+  
   // Ensure a default board + columns exist
   const board = await caller.boards.createDefaultIfMissing({ orgId });
 
@@ -47,8 +54,6 @@ export default async function TasksPage({
     updatedAt: board!.updatedAt.toISOString(),
     columns: board!.columns.map((c) => ({ ...c })),
   };
-
-  const tab = searchParams?.tab === "board" ? "board" : "backlog";
 
   // counts (rough, server-side snapshot)
   const activeSprintIds = new Set(safeSprints.filter((s) => s.status === "ACTIVE").map((s) => s.id));

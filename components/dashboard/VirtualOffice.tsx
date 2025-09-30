@@ -47,7 +47,13 @@ export default function VirtualOffice({
 
 function OrgRoster() {
   const { orgMembers } = usePresence();
-  const members = [...orgMembers.values()];
+  const members = React.useMemo(() => {
+    const arr = [...orgMembers.values()]
+    // eslint-disable-next-line no-console
+    console.debug('[VirtualOffice] OrgRoster render', { count: arr.length, arr })
+    return arr.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+  }, [orgMembers])
+
   return (
     <Card className="p-4">
       <h2 className="text-sm font-semibold mb-2">People in org</h2>
@@ -61,7 +67,7 @@ function OrgRoster() {
               <AvatarImage src={m.imageUrl ?? undefined} />
               <AvatarFallback>{m.name?.[0] ?? "U"}</AvatarFallback>
             </Avatar>
-            <span className="text-sm">{m.name}</span>
+            <span className="text-sm">{m.name ?? 'Unknown'}</span>
             <span className="ml-auto text-xs text-muted-foreground">
               {m.status === "online"
                 ? "Online"
@@ -94,7 +100,11 @@ function Header({ orgId }: { orgId: string }) {
         <div className="text-sm text-muted-foreground">Jump into rooms, see who’s around, and collaborate fast.</div>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" onClick={() => setStatus(nextStatus())}>
+        <Button variant="outline" onClick={() => {
+          // eslint-disable-next-line no-console
+          console.log('[VirtualOffice] toggle status from', me.status, 'to', nextStatus())
+          setStatus(nextStatus())
+        }}>
           <Dot className="h-5 w-5 -ml-1" />
           {label}
         </Button>
@@ -124,10 +134,12 @@ function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: Room
     return map;
   }, [activeSessionsQ.data]);
 
+  const membersArr = useMemo(() => [...orgMembers.values()], [orgMembers]);
+
   return (
     <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
       {(roomsQ.data ?? []).map((room) => {
-        const occupants = [...orgMembers.values()].filter(m => m.roomId === room.id);
+        const occupants = membersArr.filter(m => m.roomId === room.id);
         const youAreHere = currentRoomId === room.id;
         const liveSince = activeMap.get(room.id);
 
@@ -156,6 +168,7 @@ function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: Room
                   <Button
                     size="sm"
                     onClick={async () => {
+                      console.log('[VirtualOffice] Join click', { roomId: room.id })
                       await joinRoom(room.id);
                       router.push(`/dashboard/office/room/${room.id}`);
                     }}
@@ -168,6 +181,7 @@ function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: Room
                     size="sm"
                     variant="secondary"
                     onClick={async () => {
+                      console.log('[VirtualOffice] Leave click', { roomId: room.id })
                       await leaveRoom();
                     }}
                     className="gap-1"
@@ -193,7 +207,9 @@ function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: Room
                     <DropdownMenuItem
                       className="gap-2"
                       onClick={() => {
-                        navigator.clipboard.writeText(`${window.location.origin}/dashboard/office/room/${room.id}`);
+                        const link = `${window.location.origin}/dashboard/office/room/${room.id}`
+                        navigator.clipboard.writeText(link);
+                        console.log('[VirtualOffice] Copied link', link)
                       }}
                     >
                       <LinkIcon className="h-4 w-4" /> Copy link

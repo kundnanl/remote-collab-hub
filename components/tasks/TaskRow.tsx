@@ -35,6 +35,7 @@ export function TaskRow({
   onToggleSelect,
   onOpen,
   recentlyChanged = false,
+  dragHandleProps, // 👈 add here
 }: {
   task: Task;
   columns: Column[];
@@ -43,6 +44,7 @@ export function TaskRow({
   onToggleSelect: (checked: boolean) => void;
   onOpen: (id: string) => void;
   recentlyChanged?: boolean;
+  dragHandleProps?: Record<string, unknown>;
 }) {
   const utils = trpc.useUtils();
   const update = trpc.tasks.update.useMutation({
@@ -124,6 +126,7 @@ export function TaskRow({
       )}
       {...attributes}
       {...listeners}
+      {...dragHandleProps}
       onPointerDown={handlePointerDown}
       onClick={handleRowClick}
     >
@@ -196,7 +199,7 @@ export function TaskRow({
           {PRIORITIES.map((p) => (
             <DropdownMenuItem
               key={p.key}
-              onClick={(e) => { e.stopPropagation(); update.mutate({ taskId: task.id, data: { priority: p.key as any } }); }}
+              onClick={(e) => { e.stopPropagation(); update.mutate({ taskId: task.id, data: { priority: p.key } }); }}
               data-noopen
             >
               <p.icon className={cn("mr-2 h-4 w-4", p.className)} /> {p.label}
