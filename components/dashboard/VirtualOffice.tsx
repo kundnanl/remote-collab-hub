@@ -1,11 +1,10 @@
-// app/(dashboard)/office/VirtualOffice.tsx
 "use client";
 
 import * as React from "react";
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { MoreHorizontal, Users, Video, Plus, LogOut, Pencil, Link as LinkIcon, Trash2, Dot } from "lucide-react";
+import { MoreHorizontal, Video, LogOut, Pencil, Link as LinkIcon, Trash2, Dot } from "lucide-react";
 
 import { trpc } from "@/server/client";
 import type { RouterOutputs } from "@/server/client";
@@ -29,11 +28,9 @@ function pill(cls = "") {
 export default function VirtualOffice({
   initialRooms,
   orgId,
-  me,
 }: {
   initialRooms: RoomType[];
   orgId: string;
-  me: any; // already provided to PresenceProvider where typed
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -50,7 +47,6 @@ export default function VirtualOffice({
 
 function OrgRoster() {
   const { orgMembers } = usePresence();
-
   const members = [...orgMembers.values()];
   return (
     <Card className="p-4">
@@ -80,8 +76,6 @@ function OrgRoster() {
   );
 }
 
-/* ---------------- Header ---------------- */
-
 function Header({ orgId }: { orgId: string }) {
   const { me, setStatus } = usePresence();
 
@@ -92,8 +86,6 @@ function Header({ orgId }: { orgId: string }) {
     me.status === 'online' ? 'Available' :
       me.status === 'focus' ? 'Focus' :
         'Do Not Disturb';
-
-
 
   return (
     <div className="flex items-center justify-between">
@@ -111,8 +103,6 @@ function Header({ orgId }: { orgId: string }) {
     </div>
   );
 }
-
-/* --------------- Office Grid --------------- */
 
 function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: RoomType[] }) {
   const utils = trpc.useUtils();
