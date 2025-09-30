@@ -3,7 +3,7 @@
 import { useUser, useOrganization } from "@clerk/nextjs";
 import { Rocket, FileText, Video } from "lucide-react";
 import { motion } from "framer-motion";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const mockPresence = [
   { name: "Laksh", activity: "Editing Docs" },

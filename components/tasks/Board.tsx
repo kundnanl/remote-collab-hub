@@ -27,7 +27,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type BoardType = RouterOutputs["boards"]["getDefault"];
 type Task = RouterOutputs["tasks"]["list"][number];
