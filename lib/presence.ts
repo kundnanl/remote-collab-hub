@@ -1,16 +1,17 @@
 import { supabase } from './supabaseClient'
 
-export type UserStatus = 'online' | 'away' | 'dnd'
+export type UserStatus = 'online' | 'focus' | 'dnd';
+
 export type OrgPresenceState = {
-  userId: string        // Clerk ID
-  name: string | null
-  imageUrl: string | null
-  orgId: string         // Organization.clerkOrgId
-  roomId: string | null // current room or null for lobby/idle
-  status: UserStatus
-  muted?: boolean
-  handRaised?: boolean
-}
+  userId: string;
+  name: string | null;
+  imageUrl: string | null;
+  orgId: string;
+  roomId: string | null;
+  status: UserStatus;
+  muted?: boolean;
+  handRaised?: boolean;
+};
 
 const chanNameOrg = (orgId: string) => `org:${orgId}:office`
 const chanNameRoom = (orgId: string, roomId: string) => `org:${orgId}:room:${roomId}`

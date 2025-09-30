@@ -81,14 +81,14 @@ export function PresenceProvider({
 
     // Start session: 0 → 1
     if (prevCount === 0 && nextCount === 1) {
-      try { await startOrGet.mutateAsync({ roomId }); } catch {}
+      try { await startOrGet.mutateAsync({ roomId }); } catch { }
     }
 
     // End session: 1 → 0 (with small grace to avoid flaps)
     if (prevCount > 0 && nextCount === 0) {
       if (endTimerRef.current) clearTimeout(endTimerRef.current);
       endTimerRef.current = setTimeout(async () => {
-        try { await endActive.mutateAsync({ roomId }); } catch {}
+        try { await endActive.mutateAsync({ roomId }); } catch { }
       }, 5000);
     }
 
@@ -127,7 +127,7 @@ export function PresenceProvider({
     }
     // if last person, close session
     if (roomMembersRef.current.size === 1) {
-      try { await endActive.mutateAsync({ roomId: currentRoomId }); } catch {}
+      try { await endActive.mutateAsync({ roomId: currentRoomId }); } catch { }
     }
     await roomChannelRef.current.unsubscribe();
     roomChannelRef.current = null;
@@ -140,15 +140,15 @@ export function PresenceProvider({
   }, [currentRoomId, endActive]);
 
   // ---------- join helper ----------
+  // when joining a room
   const joinRoom = useCallback(async (roomId: string | null) => {
     if (roomId === currentRoomId) return;
-    if (roomChannelRef.current) {
-      await leaveRoom(); // ensures session close if needed
-    }
+    if (roomChannelRef.current) await leaveRoom();
+
     setCurrentRoomId(roomId);
 
     meRef.current = { ...meRef.current, roomId };
-    if (orgChannelRef.current) await orgChannelRef.current.track(meRef.current);
+    if (orgChannelRef.current) await orgChannelRef.current.track(meRef.current); // ✅ always reflect org-wide
 
     if (!roomId) return;
 
@@ -156,20 +156,8 @@ export function PresenceProvider({
     roomChannelRef.current = ch;
     ch.on("presence", { event: "sync" }, () => applyRoomPresence(roomId));
 
-    // end session if you’re last and you close
-    const handleUnload = async () => {
-      if (roomMembersRef.current.size === 1) {
-        try { await endActive.mutateAsync({ roomId }); } catch {}
-      }
-    };
-    window.addEventListener("beforeunload", handleUnload);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") handleUnload();
-    });
-
-    // first sync
     applyRoomPresence(roomId);
-  }, [applyRoomPresence, currentRoomId, leaveRoom, orgId, endActive]);
+  }, [applyRoomPresence, currentRoomId, leaveRoom, orgId]);
 
   const setStatus = useCallback(async (status: OrgPresenceState["status"]) => {
     meRef.current = { ...meRef.current, status };

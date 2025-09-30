@@ -20,6 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import { CreateRoomDialog } from "./CreateRoomDialog";
 import { EditRoomDialog } from "@/components/dashboard/EditRoomDialog";
+import { UserStatus } from "@/lib/presence";
 
 function pill(cls = "") {
   return `inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full border ${cls}`;
@@ -35,10 +36,47 @@ export default function VirtualOffice({
   me: any; // already provided to PresenceProvider where typed
 }) {
   return (
-    <div className="space-y-6">
-      <Header orgId={orgId} />
-      <OfficeGrid orgId={orgId} initialRooms={initialRooms} />
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="lg:col-span-3 space-y-6">
+        <Header orgId={orgId} />
+        <OfficeGrid orgId={orgId} initialRooms={initialRooms} />
+      </div>
+      <div className="lg:col-span-1">
+        <OrgRoster />
+      </div>
     </div>
+  );
+}
+
+function OrgRoster() {
+  const { orgMembers } = usePresence();
+
+  const members = [...orgMembers.values()];
+  return (
+    <Card className="p-4">
+      <h2 className="text-sm font-semibold mb-2">People in org</h2>
+      <div className="space-y-2">
+        {members.length === 0 && (
+          <div className="text-xs text-muted-foreground">No one online</div>
+        )}
+        {members.map((m) => (
+          <div key={m.userId} className="flex items-center gap-2">
+            <Avatar className="h-6 w-6">
+              <AvatarImage src={m.imageUrl ?? undefined} />
+              <AvatarFallback>{m.name?.[0] ?? "U"}</AvatarFallback>
+            </Avatar>
+            <span className="text-sm">{m.name}</span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {m.status === "online"
+                ? "Online"
+                : m.status === "focus"
+                  ? "Focus"
+                  : "Do Not Disturb"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -47,11 +85,15 @@ export default function VirtualOffice({
 function Header({ orgId }: { orgId: string }) {
   const { me, setStatus } = usePresence();
 
-  const nextStatus = () =>
-    me.status === "AVAILABLE" ? "FOCUS" : me.status === "FOCUS" ? "DND" : "AVAILABLE";
+  const nextStatus = (): UserStatus =>
+    me.status === 'online' ? 'focus' : me.status === 'focus' ? 'dnd' : 'online';
 
   const label =
-    me.status === "AVAILABLE" ? "Available" : me.status === "FOCUS" ? "Focus" : "Do not disturb";
+    me.status === 'online' ? 'Available' :
+      me.status === 'focus' ? 'Focus' :
+        'Do Not Disturb';
+
+
 
   return (
     <div className="flex items-center justify-between">
