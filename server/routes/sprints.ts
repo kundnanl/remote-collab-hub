@@ -56,17 +56,51 @@ export const sprintsRouter = router({
       await ensureMember(ctx, input.orgId);
       return ctx.prisma.sprint.update({
         where: { id: input.sprintId },
-        data: { status: "ACTIVE" },
+        data: {
+          status: "ACTIVE",
+          startDate: new Date(),
+        },
       });
     }),
 
-  close: protectedProcedure
+  complete: protectedProcedure // rename from "close" for clarity
     .input(z.object({ sprintId: z.string(), orgId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await ensureMember(ctx, input.orgId);
       return ctx.prisma.sprint.update({
         where: { id: input.sprintId },
-        data: { status: "CLOSED" },
+        data: {
+          status: "CLOSED",
+          endDate: new Date(),
+        },
+      });
+    }),
+
+  update: protectedProcedure
+    .input(z.object({
+      orgId: z.string(),
+      sprintId: z.string(),
+      name: z.string().min(1).max(100).optional(),
+      goal: z.string().max(500).nullable().optional(),
+      startDate: z.string().datetime().nullable().optional(),
+      endDate: z.string().datetime().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await ensureMember(ctx, input.orgId);
+      return ctx.prisma.sprint.update({
+        where: { id: input.sprintId },
+        data: {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          goal: input.goal === undefined ? undefined : input.goal,
+          startDate:
+            input.startDate === undefined
+              ? undefined
+              : input.startDate ? new Date(input.startDate) : null,
+          endDate:
+            input.endDate === undefined
+              ? undefined
+              : input.endDate ? new Date(input.endDate) : null,
+        },
       });
     }),
 });

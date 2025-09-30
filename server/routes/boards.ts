@@ -112,6 +112,35 @@ export const boardsRouter = router({
         include: { columns: { orderBy: { position: "asc" } } },
       });
     }),
+
+  createColumn: protectedProcedure
+    .input(z.object({ boardId: z.string(), orgId: z.string(), title: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      await ensureMember(ctx, input.orgId);
+      const max = await ctx.prisma.boardColumn.findFirst({
+        where: { boardId: input.boardId },
+        orderBy: { position: "desc" },
+        select: { position: true },
+      });
+      return ctx.prisma.boardColumn.create({
+        data: {
+          boardId: input.boardId,
+          title: input.title,
+          status: "TODO", 
+          position: (max?.position ?? -1) + 1,
+        },
+      });
+    }),
+
+  deleteColumn: protectedProcedure
+    .input(z.object({ columnId: z.string(), orgId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ensureMember(ctx, input.orgId);
+      // move tasks out of the column (to null) or another default
+      await ctx.prisma.task.updateMany({ where: { columnId: input.columnId }, data: { columnId: null } });
+      await ctx.prisma.boardColumn.delete({ where: { id: input.columnId } });
+      return { ok: true };
+    }),
 });
 
 

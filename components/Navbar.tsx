@@ -10,16 +10,19 @@ import {
   OrganizationSwitcher,
 } from "@clerk/nextjs";
 import { Menu, X } from "lucide-react";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
 
-  const isDashboard = pathname?.startsWith("/dashboard") || pathname?.includes("/sprints");
+  const isDashboard =
+    pathname?.startsWith("/dashboard") || pathname?.includes("/sprints");
 
   const landingNav = [
     { label: "Home", href: "/" },
@@ -37,25 +40,54 @@ export function Navbar() {
 
   const activeNav = isDashboard ? appNav : landingNav;
 
+  const handleNavClick = (href: string) => {
+    startTransition(() => {
+      router.push(href);
+    });
+    setIsOpen(false);
+  };
+
   return (
-    <nav className="w-full z-50 border-b border-gray-200 bg-white/70 backdrop-blur-md">
+    
+    <nav className="w-full z-50 border-b border-border bg-background/70 backdrop-blur-md relative">
+      {/* Loading bar */}
+      <AnimatePresence>
+        {isPending && (
+          <motion.div
+            key="loading-bar"
+            className="absolute top-0 left-0 h-0.5 bg-primary"
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: "easeInOut" }}
+          />
+        )}
+      </AnimatePresence>
+
       <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-24 py-4 flex items-center justify-between">
         {/* Brand */}
-        <Link href="/" className="text-xl font-bold tracking-tight">
-          Remote<span className="text-indigo-600">Hub</span>
+        <Link
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            handleNavClick("/");
+          }}
+          className="text-xl font-bold tracking-tight"
+        >
+          Remote<span className="text-primary">Hub</span>
         </Link>
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center space-x-8 text-sm font-medium">
           {activeNav.map((link) => (
-            <Link
+            <button
               key={link.href}
-              href={link.href}
-              className="relative group text-gray-700 hover:text-gray-900 transition"
+              onClick={() => handleNavClick(link.href)}
+              className="relative group text-muted-foreground hover:text-foreground transition"
             >
               {link.label}
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-indigo-600 group-hover:w-full transition-all duration-300" />
-            </Link>
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300" />
+            </button>
           ))}
         </div>
 
@@ -66,21 +98,37 @@ export function Navbar() {
               appearance={{
                 elements: {
                   organizationSwitcherTrigger:
-                    "border border-gray-200 px-2 py-1 rounded-md",
+                    "border border-border px-2 py-1 rounded-md",
                 },
               }}
             />
           )}
+
           <SignedOut>
             <SignInButton mode="modal">
-              <Button variant="outline" size="sm">
-                Sign In
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isPending}
+                className="relative"
+              >
+                {isPending ? (
+                  <motion.div
+                    className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"
+                    aria-label="loading"
+                  />
+                ) : (
+                  "Sign In"
+                )}
               </Button>
             </SignInButton>
             <SignUpButton mode="modal">
-              <Button size="sm">Get Started</Button>
+              <Button size="sm" disabled={isPending}>
+                {isPending ? "Loading..." : "Get Started"}
+              </Button>
             </SignUpButton>
           </SignedOut>
+
           <SignedIn>
             <UserButton afterSignOutUrl="/" />
           </SignedIn>
@@ -103,14 +151,13 @@ export function Navbar() {
           >
             <div className="flex flex-col space-y-3 text-sm font-medium">
               {activeNav.map((link) => (
-                <Link
+                <button
                   key={link.href}
-                  href={link.href}
-                  onClick={() => setIsOpen(false)}
-                  className="text-gray-700 hover:text-gray-900 transition"
+                  onClick={() => handleNavClick(link.href)}
+                  className="text-muted-foreground hover:text-foreground transition text-left"
                 >
                   {link.label}
-                </Link>
+                </button>
               ))}
 
               {isDashboard && (
@@ -118,7 +165,7 @@ export function Navbar() {
                   appearance={{
                     elements: {
                       organizationSwitcherTrigger:
-                        "border border-gray-200 px-2 py-1 rounded-md mt-2",
+                        "border border-border px-2 py-1 rounded-md mt-2",
                     },
                   }}
                 />
@@ -126,13 +173,18 @@ export function Navbar() {
 
               <SignedOut>
                 <SignInButton mode="modal">
-                  <Button variant="outline" size="sm" className="w-full">
-                    Sign In
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    disabled={isPending}
+                  >
+                    {isPending ? "Loading..." : "Sign In"}
                   </Button>
                 </SignInButton>
                 <SignUpButton mode="modal">
-                  <Button size="sm" className="w-full">
-                    Get Started
+                  <Button size="sm" className="w-full" disabled={isPending}>
+                    {isPending ? "Loading..." : "Get Started"}
                   </Button>
                 </SignUpButton>
               </SignedOut>

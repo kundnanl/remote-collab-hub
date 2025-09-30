@@ -369,6 +369,72 @@ export const tasksRouter = router({
       }),
   }),
 
+    orgMeta: protectedProcedure
+    .input(z.object({ orgId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await ensureMember(ctx, input.orgId);
+
+      const [assignees, sprints, columns] = await Promise.all([
+        ctx.prisma.user.findMany({
+          where: {
+            organizations: { some: { organization: { clerkOrgId: input.orgId } } },
+          },
+          select: { clerkId: true, name: true, imageUrl: true, email: true },
+          orderBy: { name: "asc" },
+        }),
+        ctx.prisma.sprint.findMany({
+          where: { orgId: input.orgId, status: { in: ["PLANNED", "ACTIVE"] } },
+          orderBy: [{ status: "asc" }, { startDate: "asc" }],
+        }),
+        ctx.prisma.boardColumn.findMany({
+          where: { board: { orgId: input.orgId } },
+          orderBy: { position: "asc" },
+        }),
+      ]);
+
+      return { assignees, sprints, columns };
+    }),
+
+  /** bulk update (priority/assignee/sprint/column) */
+  bulkUpdate: protectedProcedure
+    .input(z.object({
+      orgId: z.string(),
+      taskIds: z.array(z.string()).min(1),
+      data: z.object({
+        priority: z.nativeEnum(TaskPriority).optional(),
+        assigneeId: z.string().nullable().optional(),
+        sprintId: z.string().nullable().optional(),
+        columnId: z.string().nullable().optional(),
+      })
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await ensureMember(ctx, input.orgId);
+
+      await ctx.prisma.task.updateMany({
+        where: { id: { in: input.taskIds }, orgId: input.orgId },
+        data: {
+          priority: input.data.priority,
+          assigneeId: input.data.assigneeId ?? undefined,
+          sprintId: input.data.sprintId ?? undefined,
+          columnId: input.data.columnId ?? undefined,
+        }
+      });
+
+      // lightweight activity entry
+      await ctx.prisma.taskActivity.createMany({
+        data: input.taskIds.map(id => ({
+          taskId: id,
+          orgId: input.orgId,
+          actorId: ctx.auth.userId!,
+          type: "UPDATED",
+          meta: input.data as Prisma.InputJsonValue,
+        })),
+      });
+
+      return { ok: true };
+    }),
+
+
   /** Activity */
   activity: router({
     list: protectedProcedure

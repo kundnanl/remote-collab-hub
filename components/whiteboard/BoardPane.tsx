@@ -35,7 +35,7 @@ function YjsTldraw() {
   }
 
   // Make sure Tldraw fills entire parent
-  return <Tldraw store={storeWithStatus.store} autoFocus className="h-full w-full" />;
+  return <Tldraw licenseKey="tldraw-2026-01-08/WyI0NlU2dW5CYyIsWyIqIl0sMTYsIjIwMjYtMDEtMDgiXQ.Nv8avx7+A/PlJiLB1ALuQ7Uf4zJYogBJYTEM0y5MkUU33zSXJ8mDX+g/xViqa6XyldXACUnQL+/BR79flYmAHQ" store={storeWithStatus.store} autoFocus className="h-full w-full" />;
 }
 
 export default function BoardPane({ roomId }: { roomId: string }) {

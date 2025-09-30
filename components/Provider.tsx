@@ -30,7 +30,7 @@ export default function Provider({ children }: { children: React.ReactNode }) {
 }
 
 function getBaseUrl() {
-  if (typeof window !== "undefined") return ""; // In the browser, use relative URL
+  if (typeof window !== "undefined") return ""; 
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return `http://localhost:${process.env.PORT ?? 3000}`;
 }

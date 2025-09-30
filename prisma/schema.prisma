@@ -181,7 +181,6 @@ enum PermissionRole {
 
 // ===== Enums =====
 enum TaskStatus {
-  BACKLOG
   TODO
   IN_PROGRESS
   REVIEW
