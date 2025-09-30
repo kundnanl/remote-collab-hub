@@ -1,20 +1,11 @@
+// app/components/presence/PresenceProvider.tsx
 "use client";
 
 import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+  createContext, useContext, useEffect, useMemo, useRef, useState, useCallback,
 } from "react";
-import {
-  joinOrgPresence,
-  joinRoomPresence,
-  OrgPresenceState,
-} from "@/lib/presence";
+import { joinOrgPresence, joinRoomPresence, OrgPresenceState } from "@/lib/presence";
 import { supabase } from "@/lib/supabaseClient";
-import { useCallback } from "react";
 import { trpc } from "@/server/client";
 import { useSimpleToast } from "@/components/ui/simple-toast";
 
@@ -22,8 +13,10 @@ type Ctx = {
   orgId: string;
   me: OrgPresenceState;
   orgMembers: Map<string, OrgPresenceState>;
-  roomMembers: Map<string, OrgPresenceState>; // current room members
+  roomMembers: Map<string, OrgPresenceState>;
+  currentRoomId: string | null;
   joinRoom: (roomId: string | null) => Promise<void>;
+  leaveRoom: () => Promise<void>;
   setStatus: (s: OrgPresenceState["status"]) => Promise<void>;
 };
 
@@ -43,138 +36,169 @@ export function PresenceProvider({
   me: OrgPresenceState;
   children: React.ReactNode;
 }) {
-  const [orgMembers, setOrgMembers] = useState<Map<string, OrgPresenceState>>(
-    new Map()
-  );
-  const [roomMembers, setRoomMembers] = useState<Map<string, OrgPresenceState>>(
-    new Map()
-  );
-
-  const orgChannelRef = useRef<ReturnType<typeof joinOrgPresence> | null>(null);
-  const roomChannelRef = useRef<ReturnType<typeof joinRoomPresence> | null>(
-    null
-  );
-  const currentRoomIdRef = useRef<string | null>(null);
-  const meRef = useRef(me);
-  const startOrGet = trpc.rooms.startOrGetActiveSession.useMutation();
-  const endActive = trpc.rooms.endActiveSession.useMutation();
   const { push } = useSimpleToast();
 
-  const roomCountRef = useRef<number>(0);
+  const [orgMembers, setOrgMembers] = useState<Map<string, OrgPresenceState>>(new Map());
+  const [roomMembers, setRoomMembers] = useState<Map<string, OrgPresenceState>>(new Map());
+  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
 
+  const orgMembersRef = useRef(orgMembers);
+  const roomMembersRef = useRef(roomMembers);
+  const meRef = useRef(me);
+
+  const orgChannelRef = useRef<ReturnType<typeof joinOrgPresence> | null>(null);
+  const roomChannelRef = useRef<ReturnType<typeof joinRoomPresence> | null>(null);
+
+  // grace timer to end session when room empties
+  const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // tRPC
+  const startOrGet = trpc.rooms.startOrGetActiveSession.useMutation();
+  const endActive = trpc.rooms.endActiveSession.useMutation();
+
+  // ---------- helpers ----------
+  const applyOrgPresence = useCallback(() => {
+    const ch = orgChannelRef.current!;
+    const state = ch.presenceState() as Record<string, OrgPresenceState[]>;
+    const map = new Map<string, OrgPresenceState>();
+    Object.values(state).flat().forEach(s => map.set(s.userId, s));
+    orgMembersRef.current = map;
+    setOrgMembers(map);
+  }, []);
+
+  const applyRoomPresence = useCallback(async (roomId: string) => {
+    const ch = roomChannelRef.current!;
+    const state = ch.presenceState() as Record<string, OrgPresenceState[]>;
+    const next = new Map<string, OrgPresenceState>();
+    Object.values(state).flat().forEach(s => next.set(s.userId, s));
+
+    const prev = roomMembersRef.current;
+    roomMembersRef.current = next;
+    setRoomMembers(next);
+
+    const prevCount = prev.size;
+    const nextCount = next.size;
+
+    // Start session: 0 → 1
+    if (prevCount === 0 && nextCount === 1) {
+      try { await startOrGet.mutateAsync({ roomId }); } catch {}
+    }
+
+    // End session: 1 → 0 (with small grace to avoid flaps)
+    if (prevCount > 0 && nextCount === 0) {
+      if (endTimerRef.current) clearTimeout(endTimerRef.current);
+      endTimerRef.current = setTimeout(async () => {
+        try { await endActive.mutateAsync({ roomId }); } catch {}
+      }, 5000);
+    }
+
+    // Toast joins/leaves
+    const prevIds = new Set([...prev.keys()]);
+    const currIds = new Set([...next.keys()]);
+    for (const id of currIds) {
+      if (!prevIds.has(id) && id !== meRef.current.userId) {
+        const u = next.get(id);
+        if (u) push(`${u.name ?? "Someone"} joined the room`);
+      }
+    }
+    for (const id of prevIds) {
+      if (!currIds.has(id) && id !== meRef.current.userId) {
+        const u = prev.get(id);
+        if (u) push(`${u.name ?? "Someone"} left the room`);
+      }
+    }
+  }, [endActive, push, startOrGet]);
+
+  // ---------- mount org presence ----------
   useEffect(() => {
-    // org channel
+    meRef.current = { ...meRef.current, roomId: null };
     const ch = joinOrgPresence(orgId, meRef.current);
     orgChannelRef.current = ch;
+    ch.on("presence", { event: "sync" }, applyOrgPresence);
+    return () => { ch.unsubscribe(); };
+  }, [orgId, applyOrgPresence]);
 
-    const handleSync = () => {
-      const state = ch.presenceState() as Record<string, OrgPresenceState[]>;
-      const map = new Map<string, OrgPresenceState>();
-      Object.values(state)
-        .flat()
-        .forEach((s) => map.set(s.userId, s));
-      setOrgMembers(map);
-    };
-    ch.on("presence", { event: "sync" }, handleSync);
+  // ---------- leave helper ----------
+  const leaveRoom = useCallback(async () => {
+    if (!roomChannelRef.current || !currentRoomId) {
+      setRoomMembers(new Map());
+      roomMembersRef.current = new Map();
+      return;
+    }
+    // if last person, close session
+    if (roomMembersRef.current.size === 1) {
+      try { await endActive.mutateAsync({ roomId: currentRoomId }); } catch {}
+    }
+    await roomChannelRef.current.unsubscribe();
+    roomChannelRef.current = null;
+    setCurrentRoomId(null);
+    setRoomMembers(new Map());
+    roomMembersRef.current = new Map();
 
-    return () => {
-      ch.unsubscribe();
-    };
-  }, [orgId]);
+    meRef.current = { ...meRef.current, roomId: null };
+    if (orgChannelRef.current) await orgChannelRef.current.track(meRef.current);
+  }, [currentRoomId, endActive]);
 
-  const joinRoom = useCallback(
-    async (roomId: string | null) => {
-      if (roomChannelRef.current && currentRoomIdRef.current) {
-        if (roomCountRef.current === 1) {
-          await endActive.mutateAsync({ roomId: currentRoomIdRef.current });
-        }
-        await roomChannelRef.current.unsubscribe();
-        roomChannelRef.current = null;
-        roomCountRef.current = 0;
+  // ---------- join helper ----------
+  const joinRoom = useCallback(async (roomId: string | null) => {
+    if (roomId === currentRoomId) return;
+    if (roomChannelRef.current) {
+      await leaveRoom(); // ensures session close if needed
+    }
+    setCurrentRoomId(roomId);
+
+    meRef.current = { ...meRef.current, roomId };
+    if (orgChannelRef.current) await orgChannelRef.current.track(meRef.current);
+
+    if (!roomId) return;
+
+    const ch = joinRoomPresence(orgId, roomId, meRef.current);
+    roomChannelRef.current = ch;
+    ch.on("presence", { event: "sync" }, () => applyRoomPresence(roomId));
+
+    // end session if you’re last and you close
+    const handleUnload = async () => {
+      if (roomMembersRef.current.size === 1) {
+        try { await endActive.mutateAsync({ roomId }); } catch {}
       }
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") handleUnload();
+    });
 
-      currentRoomIdRef.current = roomId;
+    // first sync
+    applyRoomPresence(roomId);
+  }, [applyRoomPresence, currentRoomId, leaveRoom, orgId, endActive]);
 
-      meRef.current = { ...meRef.current, roomId };
-      if (orgChannelRef.current)
-        await orgChannelRef.current.track(meRef.current);
-
-      if (!roomId) {
-        setRoomMembers(new Map());
-        return;
-      }
-
-      const ch = joinRoomPresence(orgId, roomId, meRef.current);
-      roomChannelRef.current = ch;
-
-      const sync = async () => {
-        const state = ch.presenceState() as Record<string, OrgPresenceState[]>;
-        const map = new Map<string, OrgPresenceState>();
-        Object.values(state)
-          .flat()
-          .forEach((s) => map.set(s.userId, s));
-        const prev = roomMembers;
-        setRoomMembers(map);
-        const prevIds = new Set([...prev.keys()]);
-        const currIds = new Set([...map.keys()]);
-        const count = map.size;
-        roomCountRef.current = count;
-
-        // if first to enter → start session
-        if (count === 1) {
-          await startOrGet.mutateAsync({ roomId });
-        }
-        for (const id of currIds)
-          if (!prevIds.has(id) && id !== meRef.current.userId) {
-            const u = map.get(id);
-            if (u) push(`${u.name ?? "Someone"} joined the room`);
-          }
-
-        for (const id of prevIds)
-          if (!currIds.has(id) && id !== meRef.current.userId) {
-            const u = prev.get(id);
-            if (u) push(`${u.name ?? "Someone"} left the room`);
-          }
-      };
-      ch.on("presence", { event: "sync" }, sync);
-    },
-    [orgId, endActive, startOrGet, push, roomMembers]
-  );
-
-  const setStatus = async (status: OrgPresenceState["status"]) => {
+  const setStatus = useCallback(async (status: OrgPresenceState["status"]) => {
     meRef.current = { ...meRef.current, status };
     if (orgChannelRef.current) await orgChannelRef.current.track(meRef.current);
-    if (roomChannelRef.current)
-      await roomChannelRef.current.track(meRef.current);
-  };
+    if (roomChannelRef.current) await roomChannelRef.current.track(meRef.current);
+  }, []);
 
-  const value = useMemo<Ctx>(
-    () => ({
-      orgId,
-      me: meRef.current,
-      orgMembers,
-      roomMembers,
-      joinRoom,
-      setStatus,
-    }),
-    [orgId, joinRoom, orgMembers, roomMembers]
-  );
-
+  // recover tracks on reconnect
   useEffect(() => {
     const channel = supabase
       .channel("connection-monitor")
       .on("system", { event: "recovered" }, async () => {
-        if (orgChannelRef.current)
-          await orgChannelRef.current.track(meRef.current);
-        if (roomChannelRef.current)
-          await roomChannelRef.current.track(meRef.current);
+        if (orgChannelRef.current) await orgChannelRef.current.track(meRef.current);
+        if (roomChannelRef.current) await roomChannelRef.current.track(meRef.current);
       })
       .subscribe();
-
-    return () => {
-      channel.unsubscribe();
-    };
+    return () => { channel.unsubscribe(); };
   }, []);
+
+  const value = useMemo<Ctx>(() => ({
+    orgId,
+    me: meRef.current,
+    orgMembers: orgMembersRef.current,
+    roomMembers: roomMembersRef.current,
+    currentRoomId,
+    joinRoom,
+    leaveRoom,
+    setStatus,
+  }), [orgId, currentRoomId, joinRoom, leaveRoom, setStatus]);
 
   return <PresenceCtx.Provider value={value}>{children}</PresenceCtx.Provider>;
 }

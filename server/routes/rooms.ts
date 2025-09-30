@@ -32,36 +32,36 @@ export const roomsRouter = router({
       });
     }),
 
-create: protectedProcedure
-  .input(z.object({ orgId: z.string(), data: RoomInput }))
-  .mutation(async ({ ctx, input }) => {
-    const isMember = await ctx.prisma.organizationMember.findFirst({
-      where: {
-        organization: { clerkOrgId: input.orgId },
-        user: { clerkId: ctx.auth.userId },
-      },
-    });
-    if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+  create: protectedProcedure
+    .input(z.object({ orgId: z.string(), data: RoomInput }))
+    .mutation(async ({ ctx, input }) => {
+      const isMember = await ctx.prisma.organizationMember.findFirst({
+        where: {
+          organization: { clerkOrgId: input.orgId },
+          user: { clerkId: ctx.auth.userId },
+        },
+      });
+      if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
 
-    // 👇 call Daily API to create a unique RTC room
-    const dailyRoom = await createDailyRoom(
-      `${input.orgId}-${Date.now()}-${input.data.name.toLowerCase()}`
-    );
+      // 👇 call Daily API to create a unique RTC room
+      const dailyRoom = await createDailyRoom(
+        `${input.orgId}-${Date.now()}-${input.data.name.toLowerCase()}`
+      );
 
-    return ctx.prisma.room.create({
-      data: {
-        orgId: input.orgId,
-        name: input.data.name,
-        kind: input.data.kind,
-        isPersistent: input.data.isPersistent,
-        capacity: input.data.capacity ?? null,
-        createdBy: ctx.auth.userId!,
-        rtcProvider: "DAILY",
-        rtcRoomName: dailyRoom.name,
-        rtcRoomUrl: dailyRoom.url,
-      },
-    });
-  }),
+      return ctx.prisma.room.create({
+        data: {
+          orgId: input.orgId,
+          name: input.data.name,
+          kind: input.data.kind,
+          isPersistent: input.data.isPersistent,
+          capacity: input.data.capacity ?? null,
+          createdBy: ctx.auth.userId!,
+          rtcProvider: "DAILY",
+          rtcRoomName: dailyRoom.name,
+          rtcRoomUrl: dailyRoom.url,
+        },
+      });
+    }),
 
   update: protectedProcedure
     .input(
@@ -143,4 +143,23 @@ create: protectedProcedure
       });
       return { ok: true, ended: true };
     }),
+
+  activeSessionsByOrg: protectedProcedure
+    .input(z.object({ orgId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const member = await ctx.prisma.organizationMember.findFirst({
+        where: {
+          organization: { clerkOrgId: input.orgId },
+          user: { clerkId: ctx.auth.userId },
+        },
+      });
+      if (!member) throw new TRPCError({ code: "FORBIDDEN" });
+
+      const sessions = await ctx.prisma.roomSession.findMany({
+        where: { endedAt: null, room: { orgId: input.orgId } },
+        select: { roomId: true, startedAt: true },
+      });
+      return sessions; 
+    }),
+
 });
