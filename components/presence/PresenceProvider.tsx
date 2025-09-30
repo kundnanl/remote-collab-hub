@@ -190,11 +190,6 @@ export function PresenceProvider({
 
     // Initial sync
     setTimeout(() => applyRoomPresence(roomId), 100);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleUnload);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
   }, [applyRoomPresence, currentRoomId, leaveRoom, orgId, endActive, me, roomMembers.size]);
 
   // ---------- set status ----------
