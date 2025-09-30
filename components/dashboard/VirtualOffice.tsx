@@ -180,8 +180,11 @@ function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: Room
             {/* occupants */}
             <div className="mt-3 flex items-center gap-2">
               <div className="flex -space-x-2">
-                {occupants.slice(0, 6).map((o) => (
-                  <Avatar key={o.userId} className="h-7 w-7 ring-2 ring-white dark:ring-slate-900">
+                {occupants.slice(0, 6).map((o, i) => (
+                  <Avatar
+                    key={o.userId ?? `occ-${i}`}
+                    className="h-7 w-7 ring-2 ring-white dark:ring-slate-900"
+                  >
                     <AvatarImage src={o.imageUrl ?? undefined} />
                     <AvatarFallback>{o.name?.[0] ?? "U"}</AvatarFallback>
                   </Avatar>
