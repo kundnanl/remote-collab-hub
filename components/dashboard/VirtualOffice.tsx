@@ -4,7 +4,15 @@ import * as React from "react";
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { MoreHorizontal, Video, LogOut, Pencil, Link as LinkIcon, Trash2, Dot } from "lucide-react";
+import {
+  MoreHorizontal,
+  Video,
+  LogOut,
+  Pencil,
+  Link as LinkIcon,
+  Trash2,
+  Dot,
+} from "lucide-react";
 
 import { trpc } from "@/server/client";
 import type { RouterOutputs } from "@/server/client";
@@ -14,7 +22,12 @@ import { usePresence } from "@/components/presence/PresenceProvider";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import { CreateRoomDialog } from "./CreateRoomDialog";
@@ -48,11 +61,11 @@ export default function VirtualOffice({
 function OrgRoster() {
   const { orgMembers } = usePresence();
   const members = React.useMemo(() => {
-    const arr = [...orgMembers.values()]
+    const arr = [...orgMembers.values()];
     // eslint-disable-next-line no-console
-    console.debug('[VirtualOffice] OrgRoster render', { count: arr.length, arr })
-    return arr.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
-  }, [orgMembers])
+    console.debug("[VirtualOffice] OrgRoster render", { count: arr.length, arr });
+    return arr.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  }, [orgMembers]);
 
   return (
     <Card className="p-4">
@@ -67,13 +80,13 @@ function OrgRoster() {
               <AvatarImage src={m.imageUrl ?? undefined} />
               <AvatarFallback>{m.name?.[0] ?? "U"}</AvatarFallback>
             </Avatar>
-            <span className="text-sm">{m.name ?? 'Unknown'}</span>
+            <span className="text-sm">{m.name ?? "Unknown"}</span>
             <span className="ml-auto text-xs text-muted-foreground">
               {m.status === "online"
                 ? "Online"
                 : m.status === "focus"
-                  ? "Focus"
-                  : "Do Not Disturb"}
+                ? "Focus"
+                : "Do Not Disturb"}
             </span>
           </div>
         ))}
@@ -86,25 +99,37 @@ function Header({ orgId }: { orgId: string }) {
   const { me, setStatus } = usePresence();
 
   const nextStatus = (): UserStatus =>
-    me.status === 'online' ? 'focus' : me.status === 'focus' ? 'dnd' : 'online';
+    me.status === "online" ? "focus" : me.status === "focus" ? "dnd" : "online";
 
   const label =
-    me.status === 'online' ? 'Available' :
-      me.status === 'focus' ? 'Focus' :
-        'Do Not Disturb';
+    me.status === "online"
+      ? "Available"
+      : me.status === "focus"
+      ? "Focus"
+      : "Do Not Disturb";
 
   return (
     <div className="flex items-center justify-between">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Virtual office</h1>
-        <div className="text-sm text-muted-foreground">Jump into rooms, see who’s around, and collaborate fast.</div>
+        <div className="text-sm text-muted-foreground">
+          Jump into rooms, see who’s around, and collaborate fast.
+        </div>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" onClick={() => {
-          // eslint-disable-next-line no-console
-          console.log('[VirtualOffice] toggle status from', me.status, 'to', nextStatus())
-          setStatus(nextStatus())
-        }}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            // eslint-disable-next-line no-console
+            console.log(
+              "[VirtualOffice] toggle status from",
+              me.status,
+              "to",
+              nextStatus()
+            );
+            void setStatus(nextStatus());
+          }}
+        >
           <Dot className="h-5 w-5 -ml-1" />
           {label}
         </Button>
@@ -114,23 +139,35 @@ function Header({ orgId }: { orgId: string }) {
   );
 }
 
-function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: RoomType[] }) {
+function OfficeGrid({
+  orgId,
+  initialRooms,
+}: {
+  orgId: string;
+  initialRooms: RoomType[];
+}) {
   const utils = trpc.useUtils();
   const router = useRouter();
-  const roomsQ = trpc.rooms.listByOrg.useQuery({ orgId }, { initialData: initialRooms });
+  const roomsQ = trpc.rooms.listByOrg.useQuery(
+    { orgId },
+    { initialData: initialRooms }
+  );
   const activeSessionsQ = trpc.rooms.activeSessionsByOrg.useQuery({ orgId });
 
   const { orgMembers, currentRoomId, joinRoom, leaveRoom } = usePresence();
 
   const removeRoom = trpc.rooms.remove.useMutation({
     onSuccess: (_, { roomId }) => {
-      utils.rooms.listByOrg.setData({ orgId }, (old) => old ? old.filter(r => r.id !== roomId) : []);
+      utils.rooms.listByOrg.setData({ orgId }, (old) =>
+        old ? old.filter((r) => r.id !== roomId) : []
+      );
     },
   });
 
   const activeMap = useMemo(() => {
     const map = new Map<string, Date>();
-    for (const s of activeSessionsQ.data ?? []) map.set(s.roomId, new Date(s.startedAt));
+    for (const s of activeSessionsQ.data ?? [])
+      map.set(s.roomId, new Date(s.startedAt));
     return map;
   }, [activeSessionsQ.data]);
 
@@ -139,22 +176,38 @@ function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: Room
   return (
     <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
       {(roomsQ.data ?? []).map((room) => {
-        const occupants = membersArr.filter(m => m.roomId === room.id);
+        const occupants = membersArr.filter((m) => m.roomId === room.id);
         const youAreHere = currentRoomId === room.id;
         const liveSince = activeMap.get(room.id);
 
         return (
-          <Card key={room.id} className="p-4 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+          <Card
+            key={room.id}
+            className="p-4 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm"
+          >
             <div className="flex items-start justify-between gap-2">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <div className="font-medium">{room.name}</div>
-                  <span className={pill("text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700")}>
+                  <span
+                    className={pill(
+                      "text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                    )}
+                  >
                     {room.kind.toLowerCase()}
                   </span>
                   {occupants.length > 0 && (
-                    <span className={pill("border-emerald-200 text-emerald-700 dark:border-emerald-900 dark:text-emerald-300")}>
-                      Live {liveSince ? `• ${formatDistanceToNow(liveSince, { addSuffix: true })}` : ""}
+                    <span
+                      className={pill(
+                        "border-emerald-200 text-emerald-700 dark:border-emerald-900 dark:text-emerald-300"
+                      )}
+                    >
+                      Live{" "}
+                      {liveSince
+                        ? `• ${formatDistanceToNow(liveSince, {
+                            addSuffix: true,
+                          })}`
+                        : ""}
                     </span>
                   )}
                 </div>
@@ -167,9 +220,11 @@ function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: Room
                 {!youAreHere ? (
                   <Button
                     size="sm"
-                    onClick={async () => {
-                      console.log('[VirtualOffice] Join click', { roomId: room.id })
-                      await joinRoom(room.id);
+                    onClick={() => {
+                      console.log("[VirtualOffice] Join click", {
+                        roomId: room.id,
+                      });
+                      // IMPORTANT: no presence join here — navigation only
                       router.push(`/dashboard/office/room/${room.id}`);
                     }}
                     className="gap-1"
@@ -181,7 +236,9 @@ function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: Room
                     size="sm"
                     variant="secondary"
                     onClick={async () => {
-                      console.log('[VirtualOffice] Leave click', { roomId: room.id })
+                      console.log("[VirtualOffice] Leave click", {
+                        roomId: room.id,
+                      });
                       await leaveRoom();
                     }}
                     className="gap-1"
@@ -200,16 +257,21 @@ function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: Room
                     <EditRoomDialog
                       orgId={orgId}
                       room={room}
-                      trigger={<DropdownMenuItem onSelect={(e) => e.preventDefault()} className="gap-2">
-                        <Pencil className="h-4 w-4" /> Edit
-                      </DropdownMenuItem>}
+                      trigger={
+                        <DropdownMenuItem
+                          onSelect={(e) => e.preventDefault()}
+                          className="gap-2"
+                        >
+                          <Pencil className="h-4 w-4" /> Edit
+                        </DropdownMenuItem>
+                      }
                     />
                     <DropdownMenuItem
                       className="gap-2"
                       onClick={() => {
-                        const link = `${window.location.origin}/dashboard/office/room/${room.id}`
+                        const link = `${window.location.origin}/dashboard/office/room/${room.id}`;
                         navigator.clipboard.writeText(link);
-                        console.log('[VirtualOffice] Copied link', link)
+                        console.log("[VirtualOffice] Copied link", link);
                       }}
                     >
                       <LinkIcon className="h-4 w-4" /> Copy link
@@ -239,10 +301,14 @@ function OfficeGrid({ orgId, initialRooms }: { orgId: string; initialRooms: Room
                 ))}
               </div>
               {occupants.length > 6 && (
-                <span className="text-xs text-muted-foreground">+{occupants.length - 6}</span>
+                <span className="text-xs text-muted-foreground">
+                  +{occupants.length - 6}
+                </span>
               )}
               {occupants.length === 0 && (
-                <span className="text-xs text-muted-foreground">No one here yet</span>
+                <span className="text-xs text-muted-foreground">
+                  No one here yet
+                </span>
               )}
             </div>
           </Card>

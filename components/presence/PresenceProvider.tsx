@@ -1,9 +1,19 @@
 "use client";
 
 import React, {
-  createContext, useContext, useEffect, useMemo, useRef, useState, useCallback,
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
 } from "react";
-import { joinOrgPresence, joinRoomPresence, OrgPresenceState } from "@/lib/presence";
+import {
+  joinOrgPresence,
+  joinRoomPresence,
+  OrgPresenceState,
+} from "@/lib/presence";
 import { supabase } from "@/lib/supabaseClient";
 import { trpc } from "@/server/client";
 import { useSimpleToast } from "@/components/ui/simple-toast";
@@ -46,15 +56,18 @@ type PresenceMeta = {
 function presenceToMap(raw: unknown): Map<string, OrgPresenceState> {
   const map = new Map<string, OrgPresenceState>();
 
-  const state = raw as Record<string, { metas?: PresenceMeta[] } | PresenceMeta[] | undefined>;
+  const state = raw as Record<
+    string,
+    { metas?: PresenceMeta[] } | PresenceMeta[] | undefined
+  >;
 
   for (const [key, obj] of Object.entries(state)) {
-    // Supabase’s type says it's an array, but internally it's actually { metas: […] }
-    const metas: PresenceMeta[] =
-      Array.isArray(obj) ? (obj as PresenceMeta[]) : (obj?.metas ?? []);
+    const metas: PresenceMeta[] = Array.isArray(obj)
+      ? (obj as PresenceMeta[])
+      : obj?.metas ?? [];
 
     if (!metas.length) continue;
-    const meta = metas[metas.length - 1]; // last meta wins
+    const meta = metas[metas.length - 1];
     const payload = meta?.payload ?? {};
 
     const user: OrgPresenceState = {
@@ -84,13 +97,31 @@ export function PresenceProvider({
 }) {
   const { push } = useSimpleToast();
 
-  const [me, setMe] = useState<OrgPresenceState>(initialMe);
-  const [orgMembers, setOrgMembers] = useState<Map<string, OrgPresenceState>>(new Map());
-  const [roomMembers, setRoomMembers] = useState<Map<string, OrgPresenceState>>(new Map());
+  // Initialize me with persisted status (client-side persistence)
+  const [me, setMe] = useState<OrgPresenceState>(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem("rh:status");
+      if (saved === "online" || saved === "focus" || saved === "dnd") {
+        return { ...initialMe, status: saved };
+      }
+    }
+    return initialMe;
+  });
+
+  const [orgMembers, setOrgMembers] = useState<Map<string, OrgPresenceState>>(
+    new Map()
+  );
+  const [roomMembers, setRoomMembers] = useState<
+    Map<string, OrgPresenceState>
+  >(new Map());
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
 
-  const orgChannelRef = useRef<ReturnType<typeof joinOrgPresence> | null>(null);
-  const roomChannelRef = useRef<ReturnType<typeof joinRoomPresence> | null>(null);
+  const orgChannelRef = useRef<ReturnType<typeof joinOrgPresence> | null>(
+    null
+  );
+  const roomChannelRef = useRef<ReturnType<typeof joinRoomPresence> | null>(
+    null
+  );
   const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
 
@@ -100,12 +131,10 @@ export function PresenceProvider({
 
   useEffect(() => {
     mountedRef.current = true;
-    // eslint-disable-next-line no-console
-    console.log('[PresenceProvider] mount org', { orgId, me: initialMe })
+    console.log("[PresenceProvider] mount org", { orgId, me: initialMe });
     return () => {
       mountedRef.current = false;
-      // eslint-disable-next-line no-console
-      console.log('[PresenceProvider] unmount')
+      console.log("[PresenceProvider] unmount");
     };
   }, [orgId, initialMe]);
 
@@ -116,61 +145,83 @@ export function PresenceProvider({
     const map = presenceToMap(raw);
     if (!mountedRef.current) return;
     setOrgMembers(map);
-    // eslint-disable-next-line no-console
-    console.debug('[PresenceProvider] org presence applied', { count: map.size, map })
+    console.debug("[PresenceProvider] org presence applied", {
+      count: map.size,
+      map,
+    });
   }, []);
 
   // ---------- room presence sync ----------
-  const applyRoomPresence = useCallback(async (roomId: string) => {
-    if (!roomChannelRef.current) return;
-    const raw = roomChannelRef.current.presenceState();
-    const next = presenceToMap(raw);
+  const applyRoomPresence = useCallback(
+    async (roomId: string) => {
+      if (!roomChannelRef.current) return;
+      const raw = roomChannelRef.current.presenceState();
+      const next = presenceToMap(raw);
 
-    if (!mountedRef.current) return;
+      if (!mountedRef.current) return;
 
-    setRoomMembers(prev => {
-      const prevCount = prev.size;
-      const nextCount = next.size;
+      setRoomMembers((prev) => {
+        const prevCount = prev.size;
+        const nextCount = next.size;
 
-      // eslint-disable-next-line no-console
-      console.debug('[PresenceProvider] room presence applied', { roomId, prevCount, nextCount, next })
+        console.debug("[PresenceProvider] room presence applied", {
+          roomId,
+          prevCount,
+          nextCount,
+          next,
+        });
 
-      // Start session: 0 → 1+
-      if (prevCount === 0 && nextCount >= 1) {
-        startOrGet.mutateAsync({ roomId })
-          .then(res => console.log('[PresenceProvider] startOrGet ok', { roomId, res }))
-          .catch(err => console.warn('[PresenceProvider] startOrGet failed', err));
-      }
-
-      // End session: 1+ → 0 (with grace period)
-      if (prevCount > 0 && nextCount === 0) {
-        if (endTimerRef.current) clearTimeout(endTimerRef.current);
-        endTimerRef.current = setTimeout(() => {
-          endActive.mutateAsync({ roomId })
-            .then(res => console.log('[PresenceProvider] endActive ok', { roomId, res }))
-            .catch(err => console.warn('[PresenceProvider] endActive failed', err));
-        }, 5000);
-      }
-
-      // Toast notifications
-      const prevIds = new Set([...prev.keys()]);
-      const currIds = new Set([...next.keys()]);
-      for (const id of currIds) {
-        if (!prevIds.has(id) && id !== me.userId) {
-          const u = next.get(id);
-          if (u) push(`${u.name ?? "Someone"} joined the room`);
+        // Start session: 0 → 1+
+        if (prevCount === 0 && nextCount >= 1) {
+          startOrGet
+            .mutateAsync({ roomId })
+            .then((res) =>
+              console.log("[PresenceProvider] startOrGet ok", { roomId, res })
+            )
+            .catch((err) =>
+              console.warn("[PresenceProvider] startOrGet failed", err)
+            );
         }
-      }
-      for (const id of prevIds) {
-        if (!currIds.has(id) && id !== me.userId) {
-          const u = prev.get(id);
-          if (u) push(`${u.name ?? "Someone"} left the room`);
-        }
-      }
 
-      return next;
-    });
-  }, [me.userId, push, startOrGet, endActive]);
+        // End session: 1+ → 0 (with grace period)
+        if (prevCount > 0 && nextCount === 0) {
+          if (endTimerRef.current) clearTimeout(endTimerRef.current);
+          endTimerRef.current = setTimeout(() => {
+            endActive
+              .mutateAsync({ roomId })
+              .then((res) =>
+                console.log("[PresenceProvider] endActive ok", {
+                  roomId,
+                  res,
+                })
+              )
+              .catch((err) =>
+                console.warn("[PresenceProvider] endActive failed", err)
+              );
+          }, 5000);
+        }
+
+        // Toast notifications
+        const prevIds = new Set([...prev.keys()]);
+        const currIds = new Set([...next.keys()]);
+        for (const id of currIds) {
+          if (!prevIds.has(id) && id !== me.userId) {
+            const u = next.get(id);
+            if (u) push(`${u.name ?? "Someone"} joined the room`);
+          }
+        }
+        for (const id of prevIds) {
+          if (!currIds.has(id) && id !== me.userId) {
+            const u = prev.get(id);
+            if (u) push(`${u.name ?? "Someone"} left the room`);
+          }
+        }
+
+        return next;
+      });
+    },
+    [me.userId, push, startOrGet, endActive]
+  );
 
   // ---------- mount org presence (PERSISTENT IN LAYOUT) ----------
   useEffect(() => {
@@ -187,10 +238,10 @@ export function PresenceProvider({
     ch.on("presence", { event: "sync" }, onSync);
     ch.on("presence", { event: "join" }, onJoin);
     ch.on("presence", { event: "leave" }, onLeave);
+    // NOTE: no 'diff' – Supabase presence events are sync/join/leave only
 
     return () => {
-      // eslint-disable-next-line no-console
-      console.log('[PresenceProvider] cleanup org channel')
+      console.log("[PresenceProvider] cleanup org channel");
       ch.unsubscribe();
       orgChannelRef.current = null;
       setOrgMembers(new Map());
@@ -202,8 +253,7 @@ export function PresenceProvider({
     const channel = roomChannelRef.current;
     const roomId = currentRoomId;
 
-    // eslint-disable-next-line no-console
-    console.log('[PresenceProvider] leaveRoom called', { roomId })
+    console.log("[PresenceProvider] leaveRoom called", { roomId });
 
     if (!channel || !roomId) {
       setRoomMembers(new Map());
@@ -214,10 +264,10 @@ export function PresenceProvider({
     // If last person, close session immediately
     if (roomMembers.size === 1) {
       try {
-        const res = await endActive.mutateAsync({ roomId })
-        console.log('[PresenceProvider] endActive on single', { roomId, res })
+        const res = await endActive.mutateAsync({ roomId });
+        console.log("[PresenceProvider] endActive on single", { roomId, res });
       } catch (e) {
-        console.warn('[PresenceProvider] endActive error', e)
+        console.warn("[PresenceProvider] endActive error", e);
       }
     }
 
@@ -235,17 +285,20 @@ export function PresenceProvider({
     setMe(updatedMe);
     if (orgChannelRef.current) {
       await orgChannelRef.current.track(updatedMe);
-      console.debug('[PresenceProvider] org track after leave', updatedMe)
+      console.debug("[PresenceProvider] org track after leave", updatedMe);
     }
   }, [currentRoomId, endActive, me, roomMembers.size]);
 
   const handleUnload = useCallback(async () => {
     if (roomMembers.size === 1 && currentRoomId) {
       try {
-        const res = await endActive.mutateAsync({ roomId: currentRoomId })
-        console.log('[PresenceProvider] handleUnload endActive', { roomId: currentRoomId, res })
+        const res = await endActive.mutateAsync({ roomId: currentRoomId });
+        console.log("[PresenceProvider] handleUnload endActive", {
+          roomId: currentRoomId,
+          res,
+        });
       } catch (e) {
-        console.warn('[PresenceProvider] handleUnload error', e)
+        console.warn("[PresenceProvider] handleUnload error", e);
       }
     }
   }, [roomMembers.size, currentRoomId, endActive]);
@@ -257,97 +310,154 @@ export function PresenceProvider({
   }, [handleUnload]);
 
   // ---------- join room ----------
-  const joinRoom = useCallback(async (roomId: string | null) => {
-    if (roomId === currentRoomId) return;
+  const joinRoom = useCallback(
+    async (roomId: string | null) => {
+      if (roomId === currentRoomId) return;
 
-    // Switch: ensure previous channel is cleaned
-    if (roomChannelRef.current) {
-      await leaveRoom();
-    }
+      // Switch: ensure previous channel is cleaned
+      if (roomChannelRef.current) {
+        await leaveRoom();
+      }
 
-    setCurrentRoomId(roomId);
+      setCurrentRoomId(roomId);
 
-    const updatedMe = { ...me, roomId };
-    setMe(updatedMe);
+      const updatedMe = { ...me, roomId };
+      setMe(updatedMe);
 
-    if (orgChannelRef.current) {
-      await orgChannelRef.current.track(updatedMe);
-      console.debug('[PresenceProvider] org track after join', updatedMe)
-    }
+      if (orgChannelRef.current) {
+        await orgChannelRef.current.track(updatedMe);
+        console.debug("[PresenceProvider] org track after join", updatedMe);
+      }
 
-    if (!roomId) return;
+      if (!roomId) return;
 
-    const ch = joinRoomPresence(orgId, roomId, updatedMe);
-    roomChannelRef.current = ch;
+      const ch = joinRoomPresence(orgId, roomId, updatedMe);
+      roomChannelRef.current = ch;
 
-    const onSync = () => applyRoomPresence(roomId);
-    const onJoin = () => applyRoomPresence(roomId);
-    const onLeave = () => applyRoomPresence(roomId);
+      const onSync = () => applyRoomPresence(roomId);
+      const onJoin = () => applyRoomPresence(roomId);
+      const onLeave = () => applyRoomPresence(roomId);
 
-    ch.on("presence", { event: "sync" }, onSync);
-    ch.on("presence", { event: "join" }, onJoin);
-    ch.on("presence", { event: "leave" }, onLeave);
+      ch.on("presence", { event: "sync" }, onSync);
+      ch.on("presence", { event: "join" }, onJoin);
+      ch.on("presence", { event: "leave" }, onLeave);
+      // NOTE: no 'diff' here either
 
-    // Initial sync (slight delay so state is populated)
-    setTimeout(onSync, 150);
+      // Initial sync (slight delay so state is populated)
+      setTimeout(onSync, 150);
 
-    // attach global handlers (idempotent because we clean on leave)
-    window.addEventListener("beforeunload", handleUnload);
-    document.addEventListener("visibilitychange", handleVisibility);
+      // attach global handlers (idempotent because we clean on leave)
+      window.addEventListener("beforeunload", handleUnload);
+      document.addEventListener("visibilitychange", handleVisibility);
 
-    // eslint-disable-next-line no-console
-    console.log('[PresenceProvider] joined room', { roomId })
-  }, [applyRoomPresence, currentRoomId, leaveRoom, orgId, me, handleUnload, handleVisibility]);
+      console.log("[PresenceProvider] joined room", { roomId });
+    },
+    [
+      applyRoomPresence,
+      currentRoomId,
+      leaveRoom,
+      orgId,
+      me,
+      handleUnload,
+      handleVisibility,
+    ]
+  );
 
   // ---------- set status ----------
-  const setStatus = useCallback(async (status: OrgPresenceState["status"]) => {
-    const updatedMe = { ...me, status };
-    setMe(updatedMe);
+  const setStatus = useCallback(
+    async (status: OrgPresenceState["status"]) => {
+      const updatedMe = { ...me, status };
+      setMe(updatedMe);
 
-    if (orgChannelRef.current) {
-      await orgChannelRef.current.track(updatedMe);
-      console.debug('[PresenceProvider] org track status', updatedMe)
-    }
-    if (roomChannelRef.current) {
-      await roomChannelRef.current.track(updatedMe);
-      console.debug('[PresenceProvider] room track status', updatedMe)
-    }
-  }, [me]);
+      // quick client persistence
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem("rh:status", status);
+        } catch {}
+      }
+
+      // Track to org + room channels
+      if (orgChannelRef.current) {
+        await orgChannelRef.current.track(updatedMe);
+        console.debug("[PresenceProvider] org track status", updatedMe);
+      }
+      if (roomChannelRef.current) {
+        await roomChannelRef.current.track(updatedMe);
+        console.debug("[PresenceProvider] room track status", updatedMe);
+      }
+
+      // Optimistically reflect locally (no need to wait for 'sync')
+      setOrgMembers((prev) => {
+        const next = new Map(prev);
+        next.set(updatedMe.userId, {
+          ...(next.get(updatedMe.userId) ?? updatedMe),
+          ...updatedMe,
+        });
+        return next;
+      });
+
+      if (currentRoomId) {
+        setRoomMembers((prev) => {
+          const next = new Map(prev);
+          if (next.has(updatedMe.userId)) {
+            next.set(updatedMe.userId, {
+              ...(next.get(updatedMe.userId) as OrgPresenceState),
+              ...updatedMe,
+            });
+          }
+          return next;
+        });
+      }
+    },
+    [me, currentRoomId]
+  );
 
   // ---------- connection recovery ----------
   useEffect(() => {
     const channel = supabase
       .channel("connection-monitor")
       .on("system", { event: "recovered" }, async () => {
-        console.log('[PresenceProvider] realtime recovered, retracking')
+        console.log("[PresenceProvider] realtime recovered, retracking");
         if (orgChannelRef.current) await orgChannelRef.current.track(me);
         if (roomChannelRef.current) await roomChannelRef.current.track(me);
       })
       .on("system", { event: "reconnect" }, async () => {
-        console.log('[PresenceProvider] realtime reconnect, retracking')
+        console.log("[PresenceProvider] realtime reconnect, retracking");
         if (orgChannelRef.current) await orgChannelRef.current.track(me);
         if (roomChannelRef.current) await roomChannelRef.current.track(me);
       })
       .subscribe((status) => {
-        console.log('[PresenceProvider] connection-monitor status', status)
+        console.log("[PresenceProvider] connection-monitor status", status);
       });
 
     return () => {
-      console.log('[PresenceProvider] connection-monitor unsubscribe')
+      console.log("[PresenceProvider] connection-monitor unsubscribe");
       channel.unsubscribe();
     };
   }, [me]);
 
-  const value = useMemo<Ctx>(() => ({
-    orgId,
-    me,
-    orgMembers,
-    roomMembers,
-    currentRoomId,
-    joinRoom,
-    leaveRoom,
-    setStatus,
-  }), [orgId, me, orgMembers, roomMembers, currentRoomId, joinRoom, leaveRoom, setStatus]);
+  const value = useMemo<Ctx>(
+    () => ({
+      orgId,
+      me,
+      orgMembers,
+      roomMembers,
+      currentRoomId,
+      joinRoom,
+      leaveRoom,
+      setStatus,
+    }),
+    [
+      orgId,
+      me,
+      orgMembers,
+      roomMembers,
+      currentRoomId,
+      joinRoom,
+      leaveRoom,
+      setStatus,
+    ]
+  );
 
   return <PresenceCtx.Provider value={value}>{children}</PresenceCtx.Provider>;
 }

@@ -1,14 +1,18 @@
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
-import { createCaller } from '@/server'
-import { PresenceProvider } from '@/components/presence/PresenceProvider'
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import { createCaller } from "@/server";
+import { PresenceProvider } from "@/components/presence/PresenceProvider";
 
-export default async function OfficeLayout({ children }: { children: React.ReactNode }) {
-  const { userId, orgId } = await auth()
-  if (!userId || !orgId) redirect('/')
+export default async function OfficeLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { userId, orgId } = await auth();
+  if (!userId || !orgId) redirect("/");
 
-  const caller = await createCaller()
-  const me = await caller.user.me()
+  const caller = await createCaller();
+  const me = await caller.user.me();
 
   const initialMe = {
     userId,
@@ -16,12 +20,12 @@ export default async function OfficeLayout({ children }: { children: React.React
     imageUrl: me?.imageUrl ?? null,
     orgId: orgId!,
     roomId: null,
-    status: 'online' as const,
-  }
+    status: "online" as const, // client will override from localStorage if present
+  };
 
   return (
     <PresenceProvider orgId={orgId!} me={initialMe}>
       {children}
     </PresenceProvider>
-  )
+  );
 }

@@ -22,6 +22,13 @@ export default function OfficeRoomPage({
   const tokenMutation = trpc.rtc.getToken.useMutation();
   const { joinRoom, leaveRoom } = usePresence();
 
+  // Track whether THIS effect actually joined presence
+  const joinedViaThisEffectRef = useRef(false);
+
+  // Dev-only: React 18 StrictMode runs mount -> cleanup -> mount.
+  // We skip the first synthetic cleanup so we don't prematurely leave the room.
+  const devCleanupSkipRef = useRef(0);
+
   useEffect(() => {
     let aborted = false;
     let currentCall: DailyCall | null = null;
@@ -30,10 +37,11 @@ export default function OfficeRoomPage({
       if (isInitialized || callRef.current) return;
 
       try {
-        console.log('[OfficeRoomPage] joinCall -> presence join', id)
+        console.log("[OfficeRoomPage] joinCall -> presence join", id);
         await joinRoom(id);
+        joinedViaThisEffectRef.current = true;
 
-        console.log('[OfficeRoomPage] fetching token/url')
+        console.log("[OfficeRoomPage] fetching token/url");
         const { token, url } = await tokenMutation.mutateAsync({ roomId: id });
         if (aborted || callRef.current) return;
 
@@ -48,7 +56,7 @@ export default function OfficeRoomPage({
         setIsInitialized(true);
 
         call.on("left-meeting", async () => {
-          console.log('[OfficeRoomPage] left-meeting')
+          console.log("[OfficeRoomPage] left-meeting");
           if (!aborted) {
             await leaveRoom();
             router.push("/dashboard/office");
@@ -59,7 +67,7 @@ export default function OfficeRoomPage({
           console.error("[OfficeRoomPage] Daily error:", error);
         });
 
-        console.log('[OfficeRoomPage] joining daily', { url })
+        console.log("[OfficeRoomPage] joining daily", { url });
         await call.join({ url, token });
       } catch (err) {
         console.error("[OfficeRoomPage] Failed to join call:", err);
@@ -71,11 +79,22 @@ export default function OfficeRoomPage({
       }
     }
 
-    joinCall();
+    void joinCall();
 
     return () => {
+      console.log("[OfficeRoomPage] cleanup useEffect");
+
+      // Skip the FIRST dev-only cleanup from StrictMode
+      if (process.env.NODE_ENV !== "production") {
+        devCleanupSkipRef.current += 1;
+        if (devCleanupSkipRef.current === 1) {
+          console.log("[OfficeRoomPage] dev-first-cleanup skipped");
+          return;
+        }
+      }
+
       aborted = true;
-      console.log('[OfficeRoomPage] cleanup useEffect');
+
       const cleanup = async () => {
         const call = currentCall || callRef.current;
         currentCall = null;
@@ -84,7 +103,7 @@ export default function OfficeRoomPage({
         if (call) {
           try {
             if (call.meetingState && call.meetingState() !== "left-meeting") {
-              console.log('[OfficeRoomPage] leaving daily')
+              console.log("[OfficeRoomPage] leaving daily");
               await call.leave();
             }
           } catch (err) {
@@ -92,21 +111,24 @@ export default function OfficeRoomPage({
           } finally {
             try {
               call.destroy?.();
-              console.log('[OfficeRoomPage] destroyed daily frame')
+              console.log("[OfficeRoomPage] destroyed daily frame");
             } catch (err) {
               console.warn("[OfficeRoomPage] Error destroying Daily:", err);
             }
           }
         }
 
-        await leaveRoom();
+        // Only leave presence if THIS effect actually joined it
+        if (joinedViaThisEffectRef.current) {
+          await leaveRoom();
+        }
       };
 
-      // No await in React cleanup; fire and forget
+      // Fire and forget (React cleanup must be sync)
       void cleanup();
     };
-  // only on id changes (intentional)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // only on id changes (intentional)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   return (
