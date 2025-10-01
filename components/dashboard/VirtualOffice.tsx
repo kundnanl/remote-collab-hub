@@ -62,7 +62,6 @@ function OrgRoster() {
   const { orgMembers } = usePresence();
   const members = React.useMemo(() => {
     const arr = [...orgMembers.values()];
-    // eslint-disable-next-line no-console
     console.debug("[VirtualOffice] OrgRoster render", { count: arr.length, arr });
     return arr.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [orgMembers]);
@@ -120,7 +119,6 @@ function Header({ orgId }: { orgId: string }) {
         <Button
           variant="outline"
           onClick={() => {
-            // eslint-disable-next-line no-console
             console.log(
               "[VirtualOffice] toggle status from",
               me.status,
@@ -154,7 +152,7 @@ function OfficeGrid({
   );
   const activeSessionsQ = trpc.rooms.activeSessionsByOrg.useQuery({ orgId });
 
-  const { orgMembers, currentRoomId, joinRoom, leaveRoom } = usePresence();
+  const { orgMembers, currentRoomId, leaveRoom } = usePresence();
 
   const removeRoom = trpc.rooms.remove.useMutation({
     onSuccess: (_, { roomId }) => {
@@ -224,7 +222,7 @@ function OfficeGrid({
                       console.log("[VirtualOffice] Join click", {
                         roomId: room.id,
                       });
-                      // IMPORTANT: no presence join here — navigation only
+                      // navigation only; room page handles presence join
                       router.push(`/dashboard/office/room/${room.id}`);
                     }}
                     className="gap-1"

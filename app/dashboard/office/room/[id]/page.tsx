@@ -22,19 +22,19 @@ export default function OfficeRoomPage({
   const tokenMutation = trpc.rtc.getToken.useMutation();
   const { joinRoom, leaveRoom } = usePresence();
 
-  // Track whether THIS effect actually joined presence
+  // Effect-LOCAL flags
   const joinedViaThisEffectRef = useRef(false);
-
-  // Dev-only: React 18 StrictMode runs mount -> cleanup -> mount.
-  // We skip the first synthetic cleanup so we don't prematurely leave the room.
   const devCleanupSkipRef = useRef(0);
+  const initializedRef = useRef(false); // <— hard lock against double join
 
   useEffect(() => {
     let aborted = false;
     let currentCall: DailyCall | null = null;
 
     async function joinCall() {
-      if (isInitialized || callRef.current) return;
+      // Synchronous idempotency: if we’ve started once, bail
+      if (initializedRef.current) return;
+      initializedRef.current = true;
 
       try {
         console.log("[OfficeRoomPage] joinCall -> presence join", id);
@@ -84,7 +84,7 @@ export default function OfficeRoomPage({
     return () => {
       console.log("[OfficeRoomPage] cleanup useEffect");
 
-      // Skip the FIRST dev-only cleanup from StrictMode
+      // Skip StrictMode’s first synthetic cleanup in dev
       if (process.env.NODE_ENV !== "production") {
         devCleanupSkipRef.current += 1;
         if (devCleanupSkipRef.current === 1) {
@@ -118,13 +118,11 @@ export default function OfficeRoomPage({
           }
         }
 
-        // Only leave presence if THIS effect actually joined it
         if (joinedViaThisEffectRef.current) {
           await leaveRoom();
         }
       };
 
-      // Fire and forget (React cleanup must be sync)
       void cleanup();
     };
     // only on id changes (intentional)
