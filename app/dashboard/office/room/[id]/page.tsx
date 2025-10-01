@@ -16,7 +16,6 @@ export default function OfficeRoomPage({
   const { id } = use(params);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const callRef = useRef<DailyCall | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
 
   const tokenMutation = trpc.rtc.getToken.useMutation();
@@ -53,7 +52,6 @@ export default function OfficeRoomPage({
 
         currentCall = call;
         callRef.current = call;
-        setIsInitialized(true);
 
         call.on("left-meeting", async () => {
           console.log("[OfficeRoomPage] left-meeting");
@@ -71,7 +69,6 @@ export default function OfficeRoomPage({
         await call.join({ url, token });
       } catch (err) {
         console.error("[OfficeRoomPage] Failed to join call:", err);
-        setIsInitialized(false);
         if (!aborted) {
           await leaveRoom();
           router.push("/dashboard/office");
@@ -125,8 +122,6 @@ export default function OfficeRoomPage({
 
       void cleanup();
     };
-    // only on id changes (intentional)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   return (
