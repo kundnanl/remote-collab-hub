@@ -62,28 +62,26 @@ export function PresenceProvider({ children, orgId }: Props) {
 
     // Subscribe + full logging
     useEffect(() => {
-        if (!initialSelf) return
-        console.groupCollapsed(`[Presence] init for org ${orgId}`)
-        console.log('initialSelf', initialSelf)
-        console.groupEnd()
+        if (!initialSelf) return;
+
+        console.groupCollapsed(`[Presence] init for org ${orgId}`);
+        console.log('initialSelf', initialSelf);
+        console.groupEnd();
+
+        // If you don’t use RLS auth for realtime, you can remove this line:
+        // supabase.realtime.setAuth();
 
         const ch = supabase.channel(`org:${orgId}:presence`, {
             config: { presence: { key: initialSelf.userId } },
         })
-        channelRef.current = ch
+        channelRef.current = ch;
 
-        const logPresenceState = (label: string) => {
-            const state = ch.presenceState() as Record<string, Array<Record<string, unknown>>>
-            const users = Object.keys(state)
-            console.log(`[Presence] ${label} →`, users.length, 'users:', users)
-        }
-
-        const handleSync = () => {
-            const state = ch.presenceState() as Record<string, Array<Record<string, unknown>>>
-            const flattened: MemberPresence[] = []
+        const computeMembers = () => {
+            const state = ch.presenceState() as Record<string, Array<Record<string, unknown>>>;
+            const flattened: MemberPresence[] = [];
             for (const [key, metas] of Object.entries(state)) {
                 for (const meta of metas) {
-                    const m = meta as PresenceMeta & { presence_ref?: string; ref?: string }
+                    const m = meta as PresenceMeta & { presence_ref?: string; ref?: string };
                     flattened.push({
                         userId: m.userId,
                         orgId: m.orgId,
@@ -93,55 +91,65 @@ export function PresenceProvider({ children, orgId }: Props) {
                         imageUrl: m.imageUrl ?? null,
                         joinedAt: m.joinedAt ?? null,
                         ref: m.presence_ref ?? m.ref ?? key,
-                    })
+                    });
                 }
             }
-            setMembers(dedupeByUserId(flattened))
-            logPresenceState('sync')
-        }
+            return dedupeByUserId(flattened);
+        };
 
-        ch.on('presence', { event: 'sync' }, handleSync)
-        ch.on('presence', { event: 'join' }, (p) => console.log('[Presence] join', p))
-        ch.on('presence', { event: 'leave' }, (p) => console.log('[Presence] leave', p))
-        ch.on('broadcast', { event: 'debug' }, (payload) => console.log('[Presence] broadcast', payload))
+        const handleSync = () => {
+            setMembers(computeMembers());
+            const users = Object.keys(ch.presenceState() ?? {});
+            console.log('[Presence] sync →', users.length, 'users:', users);
+        };
+
+        // 🔴 Previously you only logged join/leave. Call handleSync so UI updates immediately.
+        ch.on('presence', { event: 'sync' }, handleSync);
+        ch.on('presence', { event: 'join' }, () => handleSync());
+        ch.on('presence', { event: 'leave' }, () => handleSync());
 
         ch.subscribe(async (status) => {
-            console.log('[Presence] subscription status:', status)
+            console.log('[Presence] subscription status:', status);
             if (status === 'SUBSCRIBED') {
-                await new Promise(r => setTimeout(r, 200));
+                // small guard to ensure channel is fully ready before tracking
+                await new Promise((r) => setTimeout(r, 150));
                 await ch.track(initialSelf);
-                console.log('[Presence] tracking started', initialSelf);
-                setMe(initialSelf)
-                setReady(true)
+
+                // ✅ Make sure you see yourself when you’re alone
+                setMe(initialSelf);
+                setMembers((prev) =>
+                    dedupeByUserId([...prev, { ...initialSelf, ref: initialSelf.userId }])
+                );
+                setReady(true);
             } else if (status === 'CHANNEL_ERROR') {
-                console.error('[Presence] Channel error')
+                console.error('[Presence] Channel error');
             } else if (status === 'TIMED_OUT') {
-                console.warn('[Presence] Channel timed out')
+                console.warn('[Presence] Channel timed out');
             } else if (status === 'CLOSED') {
-                console.warn('[Presence] Channel closed')
+                console.warn('[Presence] Channel closed');
             }
-        })
+        });
 
         return () => {
-            console.log('[Presence] cleanup -> untrack/unsubscribe')
-            setReady(false)
-                ; (async () => {
-                    try {
-                        await ch.untrack()
-                        console.log('[Presence] untracked successfully')
-                    } catch (e) {
-                        console.warn('[Presence] untrack error', e)
-                    }
-                    try {
-                        await ch.unsubscribe()
-                        console.log('[Presence] unsubscribed successfully')
-                    } catch (e) {
-                        console.warn('[Presence] unsubscribe error', e)
-                    }
-                })()
-        }
+            console.log('[Presence] cleanup -> untrack/unsubscribe');
+            setReady(false);
+            (async () => {
+                try {
+                    await ch.untrack();
+                    console.log('[Presence] untracked successfully');
+                } catch (e) {
+                    console.warn('[Presence] untrack error', e);
+                }
+                try {
+                    await ch.unsubscribe();
+                    console.log('[Presence] unsubscribed successfully');
+                } catch (e) {
+                    console.warn('[Presence] unsubscribe error', e);
+                }
+            })();
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [initialSelf?.userId, orgId])
+    }, [initialSelf?.userId, orgId]);
 
     const updatePresence = useCallback(
         async (patch: Partial<PresenceMeta>) => {
