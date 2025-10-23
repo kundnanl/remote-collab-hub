@@ -23,7 +23,6 @@ model User {
   permissions Permission[]
 
   createdRooms Room[]        @relation("RoomCreator")
-  roomSessions RoomSession[]
 
   // --- Task relations ---
   tasksCreated  Task[] @relation("TaskCreator")
@@ -121,23 +120,9 @@ model Room {
 
   organization Organization  @relation(fields: [orgId], references: [clerkOrgId])
   creator      User          @relation("RoomCreator", fields: [createdBy], references: [clerkId])
-  sessions     RoomSession[]
 
   @@unique([orgId, name], name: "org_room_name_unique")
   @@index([orgId])
-}
-
-model RoomSession {
-  id        String    @id @default(cuid())
-  roomId    String
-  startedBy String // User.clerkId
-  startedAt DateTime  @default(now())
-  endedAt   DateTime?
-
-  room Room @relation(fields: [roomId], references: [id])
-  user User @relation(fields: [startedBy], references: [clerkId])
-
-  @@index([roomId, startedAt])
 }
 
 model Recording {

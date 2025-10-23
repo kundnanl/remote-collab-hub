@@ -1,15 +1,24 @@
-import FullPageLoader from '@/components/FullPageLoader'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
+import { prisma } from '@/server/db'
 
-export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
-  const { sessionClaims } = await auth()
+export default async function OnboardingLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const { userId } = await auth()
 
-  if (!sessionClaims) {
-    return <FullPageLoader />
+  if (!userId) {
+    redirect('/sign-in')
   }
 
-  if (sessionClaims?.metadata?.onboardingComplete === true) {
+  const existingUser = await prisma.user.findUnique({
+    where: { clerkId: userId },
+    select: { onboardingComplete: true },
+  })
+
+  if (existingUser?.onboardingComplete) {
     redirect('/dashboard')
   }
 

@@ -1,143 +1,155 @@
-"use client";
+'use client';
 
-import { use, useEffect, useRef, useState } from "react";
-import DailyIframe, { DailyCall } from "@daily-co/daily-js";
-import { useRouter } from "next/navigation";
-import BoardPane from "@/components/whiteboard/BoardPane";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { trpc } from "@/server/client";
-import { usePresence } from "@/components/presence/PresenceProvider";
+import * as React from 'react';
+import { useEffect, useRef } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import DailyIframe, { DailyCall } from '@daily-co/daily-js';
+import BoardPane from '@/components/whiteboard/BoardPane';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useOrgPresence } from '@/components/presence/PresenceProvider';
+import { RoomSidebar } from '@/components/dashboard/RoomSidebar';
+import { trpc } from '@/server/client';
 
-export default function OfficeRoomPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = use(params);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const callRef = useRef<DailyCall | null>(null);
+export default function OfficeRoomPage() {
+  const params = useParams<{ id: string }>();
+  const roomId = params.id;
   const router = useRouter();
 
-  const tokenMutation = trpc.rtc.getToken.useMutation();
-  const { joinRoom, leaveRoom } = usePresence();
+  const { joinRoom, leaveRoom } = useOrgPresence();
 
-  // Effect-LOCAL flags
-  const joinedViaThisEffectRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const callRef = useRef<DailyCall | null>(null);
+
+  // Guards against double-mount/double-cleanup in React 18 StrictMode (dev)
+  const initRef = useRef(false);
   const devCleanupSkipRef = useRef(0);
-  const initializedRef = useRef(false); // <— hard lock against double join
+  const joinedPresenceRef = useRef(false);
+
+  const tokenMutation = trpc.rtc.getToken.useMutation();
 
   useEffect(() => {
-    let aborted = false;
-    let currentCall: DailyCall | null = null;
+    if (!roomId) return;
 
-    async function joinCall() {
-      // Synchronous idempotency: if we’ve started once, bail
-      if (initializedRef.current) return;
-      initializedRef.current = true;
+    let aborted = false;
+    let createdCall: DailyCall | null = null;
+
+    const join = async () => {
+      if (initRef.current) return; // idempotent
+      initRef.current = true;
 
       try {
-        console.log("[OfficeRoomPage] joinCall -> presence join", id);
-        await joinRoom(id);
-        joinedViaThisEffectRef.current = true;
+        // 1) presence
+        await joinRoom(roomId);
+        joinedPresenceRef.current = true;
 
-        console.log("[OfficeRoomPage] fetching token/url");
-        const { token, url } = await tokenMutation.mutateAsync({ roomId: id });
+        // 2) token+url
+        const { token, url } = await tokenMutation.mutateAsync({ roomId });
+
         if (aborted || callRef.current) return;
 
+        // 3) create Daily frame
         const parent = containerRef.current ?? document.body;
         const call = DailyIframe.createFrame(parent, {
           showLeaveButton: true,
-          iframeStyle: { width: "100%", height: "100%", border: "0" },
+          iframeStyle: { width: '100%', height: '100%', border: '0' },
         });
 
-        currentCall = call;
+        createdCall = call;
         callRef.current = call;
 
-        call.on("left-meeting", async () => {
-          console.log("[OfficeRoomPage] left-meeting");
-          if (!aborted) {
+        // 4) events
+        call.on('left-meeting', async () => {
+          try {
             await leaveRoom();
-            router.push("/dashboard/office");
+          } finally {
+            router.push('/dashboard/office');
           }
         });
 
-        call.on("error", (error) => {
-          console.error("[OfficeRoomPage] Daily error:", error);
+        call.on('error', (e) => {
+          // optional: surface a toast/UI error
+          // eslint-disable-next-line no-console
+          console.error('[Daily] error', e);
         });
 
-        console.log("[OfficeRoomPage] joining daily", { url });
+        // 5) join Daily
         await call.join({ url, token });
-      } catch (err) {
-        console.error("[OfficeRoomPage] Failed to join call:", err);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[OfficeRoomPage] join failed', e);
         if (!aborted) {
-          await leaveRoom();
-          router.push("/dashboard/office");
+          await leaveRoom().catch(() => {});
+          router.push('/dashboard/office');
         }
       }
-    }
+    };
 
-    void joinCall();
+    void join();
 
     return () => {
-      console.log("[OfficeRoomPage] cleanup useEffect");
-
-      // Skip StrictMode’s first synthetic cleanup in dev
-      if (process.env.NODE_ENV !== "production") {
+      // In React 18 StrictMode, effects run, clean up, then run again (dev only).
+      // Skip the first synthetic cleanup to avoid tearing down a brand-new call.
+      if (process.env.NODE_ENV !== 'production') {
         devCleanupSkipRef.current += 1;
-        if (devCleanupSkipRef.current === 1) {
-          console.log("[OfficeRoomPage] dev-first-cleanup skipped");
-          return;
-        }
+        if (devCleanupSkipRef.current === 1) return;
       }
 
       aborted = true;
 
       const cleanup = async () => {
-        const call = currentCall || callRef.current;
-        currentCall = null;
+        const call = createdCall || callRef.current;
+        createdCall = null;
         callRef.current = null;
 
         if (call) {
           try {
-            if (call.meetingState && call.meetingState() !== "left-meeting") {
-              console.log("[OfficeRoomPage] leaving daily");
+            // If still in a meeting, leave before destroy
+            const state = call.meetingState?.();
+            if (state && state !== 'left-meeting') {
               await call.leave();
             }
-          } catch (err) {
-            console.warn("[OfficeRoomPage] Error leaving Daily:", err);
+          } catch {
+            // ignore
           } finally {
             try {
               call.destroy?.();
-              console.log("[OfficeRoomPage] destroyed daily frame");
-            } catch (err) {
-              console.warn("[OfficeRoomPage] Error destroying Daily:", err);
+            } catch {
+              // ignore
             }
           }
         }
 
-        if (joinedViaThisEffectRef.current) {
-          await leaveRoom();
+        if (joinedPresenceRef.current) {
+          await leaveRoom().catch(() => {});
+          joinedPresenceRef.current = false;
         }
       };
 
       void cleanup();
     };
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId]); // keep deps minimal to avoid rejoining
 
   return (
-    <div style={{ height: "100dvh", display: "grid" }}>
-      <Tabs defaultValue="call">
-        <TabsList>
-          <TabsTrigger value="call">Call</TabsTrigger>
-          <TabsTrigger value="board">Whiteboard</TabsTrigger>
-        </TabsList>
-        <TabsContent value="call" style={{ height: "calc(100dvh - 60px)" }}>
-          <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
-        </TabsContent>
-        <TabsContent value="board" style={{ height: "calc(100dvh - 60px)" }}>
-          <BoardPane roomId={id} />
-        </TabsContent>
-      </Tabs>
+    <div className="grid lg:grid-cols-[1fr_280px] h-[100dvh]">
+      <div className="min-w-0">
+        <Tabs defaultValue="call">
+          <TabsList>
+            <TabsTrigger value="call">Call</TabsTrigger>
+            <TabsTrigger value="board">Whiteboard</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="call" style={{ height: 'calc(100dvh - 60px)' }}>
+            <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+          </TabsContent>
+
+          <TabsContent value="board" style={{ height: 'calc(100dvh - 60px)' }}>
+            <BoardPane roomId={roomId} />
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      <RoomSidebar roomId={roomId} />
     </div>
   );
 }

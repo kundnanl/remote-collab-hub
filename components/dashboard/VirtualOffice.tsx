@@ -1,40 +1,28 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { formatDistanceToNow } from "date-fns";
-import {
-  MoreHorizontal,
-  Video,
-  LogOut,
-  Pencil,
-  Link as LinkIcon,
-  Trash2,
-  Dot,
-} from "lucide-react";
+import * as React from 'react';
+import { useRouter } from 'next/navigation';
+import { formatDistanceToNow } from 'date-fns';
+import { MoreHorizontal, Video, LogOut, Pencil, Link as LinkIcon, Trash2 } from 'lucide-react';
 
-import { trpc } from "@/server/client";
-import type { RouterOutputs } from "@/server/client";
-type RoomType = RouterOutputs["rooms"]["listByOrg"][number];
+import { trpc } from '@/server/client';
+import type { RouterOutputs } from '@/server/client';
+type RoomType = RouterOutputs['rooms']['listByOrg'][number];
 
-import { usePresence } from "@/components/presence/PresenceProvider";
-
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { CreateRoomDialog } from '@/components/dashboard/CreateRoomDialog';
+import { EditRoomDialog } from '@/components/dashboard/EditRoomDialog';
+import { useOrgPresence } from '@/components/presence/PresenceProvider';
 
-import { CreateRoomDialog } from "./CreateRoomDialog";
-import { EditRoomDialog } from "@/components/dashboard/EditRoomDialog";
-import { UserStatus } from "@/lib/presence";
-
-function pill(cls = "") {
+function pill(cls = '') {
   return `inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full border ${cls}`;
 }
 
@@ -51,62 +39,12 @@ export default function VirtualOffice({
         <Header orgId={orgId} />
         <OfficeGrid orgId={orgId} initialRooms={initialRooms} />
       </div>
-      <div className="lg:col-span-1">
-        <OrgRoster />
-      </div>
+      <div className="lg:col-span-1">{/* optional sidebar in the future */}</div>
     </div>
   );
 }
 
-function OrgRoster() {
-  const { orgMembers } = usePresence();
-  const members = React.useMemo(() => {
-    const arr = [...orgMembers.values()];
-    console.debug("[VirtualOffice] OrgRoster render", { count: arr.length, arr });
-    return arr.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-  }, [orgMembers]);
-
-  return (
-    <Card className="p-4">
-      <h2 className="text-sm font-semibold mb-2">People in org</h2>
-      <div className="space-y-2">
-        {members.length === 0 && (
-          <div className="text-xs text-muted-foreground">No one online</div>
-        )}
-        {members.map((m) => (
-          <div key={m.userId} className="flex items-center gap-2">
-            <Avatar className="h-6 w-6">
-              <AvatarImage src={m.imageUrl ?? undefined} />
-              <AvatarFallback>{m.name?.[0] ?? "U"}</AvatarFallback>
-            </Avatar>
-            <span className="text-sm">{m.name ?? "Unknown"}</span>
-            <span className="ml-auto text-xs text-muted-foreground">
-              {m.status === "online"
-                ? "Online"
-                : m.status === "focus"
-                ? "Focus"
-                : "Do Not Disturb"}
-            </span>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
 function Header({ orgId }: { orgId: string }) {
-  const { me, setStatus } = usePresence();
-
-  const nextStatus = (): UserStatus =>
-    me.status === "online" ? "focus" : me.status === "focus" ? "dnd" : "online";
-
-  const label =
-    me.status === "online"
-      ? "Available"
-      : me.status === "focus"
-      ? "Focus"
-      : "Do Not Disturb";
-
   return (
     <div className="flex items-center justify-between">
       <div className="space-y-1">
@@ -115,24 +53,7 @@ function Header({ orgId }: { orgId: string }) {
           Jump into rooms, see who’s around, and collaborate fast.
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          onClick={() => {
-            console.log(
-              "[VirtualOffice] toggle status from",
-              me.status,
-              "to",
-              nextStatus()
-            );
-            void setStatus(nextStatus());
-          }}
-        >
-          <Dot className="h-5 w-5 -ml-1" />
-          {label}
-        </Button>
-        <CreateRoomDialog orgId={orgId} />
-      </div>
+      <CreateRoomDialog orgId={orgId} />
     </div>
   );
 }
@@ -146,37 +67,22 @@ function OfficeGrid({
 }) {
   const utils = trpc.useUtils();
   const router = useRouter();
-  const roomsQ = trpc.rooms.listByOrg.useQuery(
-    { orgId },
-    { initialData: initialRooms }
-  );
-  const activeSessionsQ = trpc.rooms.activeSessionsByOrg.useQuery({ orgId });
+  const roomsQ = trpc.rooms.listByOrg.useQuery({ orgId }, { initialData: initialRooms });
 
-  const { orgMembers, currentRoomId, leaveRoom } = usePresence();
+  const { me, roomMembers, liveSince, leaveRoom, joinRoom } = useOrgPresence();
 
   const removeRoom = trpc.rooms.remove.useMutation({
     onSuccess: (_, { roomId }) => {
-      utils.rooms.listByOrg.setData({ orgId }, (old) =>
-        old ? old.filter((r) => r.id !== roomId) : []
-      );
+      utils.rooms.listByOrg.setData({ orgId }, (old) => (old ? old.filter((r) => r.id !== roomId) : []));
     },
   });
-
-  const activeMap = useMemo(() => {
-    const map = new Map<string, Date>();
-    for (const s of activeSessionsQ.data ?? [])
-      map.set(s.roomId, new Date(s.startedAt));
-    return map;
-  }, [activeSessionsQ.data]);
-
-  const membersArr = useMemo(() => [...orgMembers.values()], [orgMembers]);
 
   return (
     <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
       {(roomsQ.data ?? []).map((room) => {
-        const occupants = membersArr.filter((m) => m.roomId === room.id);
-        const youAreHere = currentRoomId === room.id;
-        const liveSince = activeMap.get(room.id);
+        const occupants = roomMembers(room.id);
+        const youAreHere = me?.roomId === room.id;
+        const startedAt = liveSince(room.id);
 
         return (
           <Card
@@ -188,30 +94,21 @@ function OfficeGrid({
                 <div className="flex items-center gap-2">
                   <div className="font-medium">{room.name}</div>
                   <span
-                    className={pill(
-                      "text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-                    )}
+                    className={pill('text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700')}
                   >
                     {room.kind.toLowerCase()}
                   </span>
                   {occupants.length > 0 && (
                     <span
                       className={pill(
-                        "border-emerald-200 text-emerald-700 dark:border-emerald-900 dark:text-emerald-300"
+                        'border-emerald-200 text-emerald-700 dark:border-emerald-900 dark:text-emerald-300'
                       )}
                     >
-                      Live{" "}
-                      {liveSince
-                        ? `• ${formatDistanceToNow(liveSince, {
-                            addSuffix: true,
-                          })}`
-                        : ""}
+                      Live{startedAt ? ` • ${formatDistanceToNow(startedAt, { addSuffix: true })}` : ''}
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  {occupants.length} inside
-                </div>
+                <div className="text-sm text-muted-foreground">{occupants.length} inside</div>
               </div>
 
               <div className="flex items-center gap-1">
@@ -219,11 +116,9 @@ function OfficeGrid({
                   <Button
                     size="sm"
                     onClick={() => {
-                      console.log("[VirtualOffice] Join click", {
-                        roomId: room.id,
+                      joinRoom(room.id).then(() => {
+                        router.push(`/dashboard/office/room/${room.id}`);
                       });
-                      // navigation only; room page handles presence join
-                      router.push(`/dashboard/office/room/${room.id}`);
                     }}
                     className="gap-1"
                   >
@@ -233,11 +128,8 @@ function OfficeGrid({
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={async () => {
-                      console.log("[VirtualOffice] Leave click", {
-                        roomId: room.id,
-                      });
-                      await leaveRoom();
+                    onClick={() => {
+                      leaveRoom();
                     }}
                     className="gap-1"
                   >
@@ -256,10 +148,7 @@ function OfficeGrid({
                       orgId={orgId}
                       room={room}
                       trigger={
-                        <DropdownMenuItem
-                          onSelect={(e) => e.preventDefault()}
-                          className="gap-2"
-                        >
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="gap-2">
                           <Pencil className="h-4 w-4" /> Edit
                         </DropdownMenuItem>
                       }
@@ -268,8 +157,7 @@ function OfficeGrid({
                       className="gap-2"
                       onClick={() => {
                         const link = `${window.location.origin}/dashboard/office/room/${room.id}`;
-                        navigator.clipboard.writeText(link);
-                        console.log("[VirtualOffice] Copied link", link);
+                        navigator.clipboard.writeText(link).catch(() => {});
                       }}
                     >
                       <LinkIcon className="h-4 w-4" /> Copy link
@@ -288,25 +176,22 @@ function OfficeGrid({
             {/* occupants */}
             <div className="mt-3 flex items-center gap-2">
               <div className="flex -space-x-2">
-                {occupants.slice(0, 6).map((o, i) => (
+                {occupants.slice(0, 6).map((o) => (
                   <Avatar
-                    key={o.userId ?? `occ-${i}`}
+                    key={o.userId + o.ref}
                     className="h-7 w-7 ring-2 ring-white dark:ring-slate-900"
+                    title={o.name ?? 'User'}
                   >
                     <AvatarImage src={o.imageUrl ?? undefined} />
-                    <AvatarFallback>{o.name?.[0] ?? "U"}</AvatarFallback>
+                    <AvatarFallback>{o.name?.[0] ?? 'U'}</AvatarFallback>
                   </Avatar>
                 ))}
               </div>
               {occupants.length > 6 && (
-                <span className="text-xs text-muted-foreground">
-                  +{occupants.length - 6}
-                </span>
+                <span className="text-xs text-muted-foreground">+{occupants.length - 6}</span>
               )}
               {occupants.length === 0 && (
-                <span className="text-xs text-muted-foreground">
-                  No one here yet
-                </span>
+                <span className="text-xs text-muted-foreground">No one here yet</span>
               )}
             </div>
           </Card>

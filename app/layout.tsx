@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import Provider from '@/components/Provider'
 import { Navbar } from '@/components/Navbar'
-import { auth } from '@clerk/nextjs/server'
 import FullPageLoader from '@/components/FullPageLoader'
 import { LoadingProvider } from '@/components/LoadingProvider'
 
@@ -18,7 +17,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata = {
-  title: ' RemoteHub',
+  title: 'RemoteHub',
   description: 'Your remote workspace',
 }
 
@@ -27,12 +26,6 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const { userId } = await auth()
-
-  if (userId === undefined) {
-    return <FullPageLoader />
-  }
-
   return (
     <ClerkProvider>
       <html lang="en">

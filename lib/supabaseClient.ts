@@ -1,25 +1,18 @@
-import { createClient } from '@supabase/supabase-js'
+'use client';
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  console.error('[supabase] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY')
-  throw new Error('Supabase env not configured')
+import { createClient } from '@supabase/supabase-js';
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; 
+
+if (!url || !anon) {
+  throw new Error('[supabase] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY');
 }
 
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    realtime: {
-      params: { eventsPerSecond: 10 },
-    },
-    global: {
-      headers: {
-        'x-rc-hub': 'presence-v1',
-      },
-    },
-  }
-)
-
-console.log('[supabase] client created', {
-  url: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 40) + '…',
-})
+export const supabase = createClient(url, anon, {
+  realtime: { 
+    params: { 
+      eventsPerSecond: 10
+    } 
+  },
+});

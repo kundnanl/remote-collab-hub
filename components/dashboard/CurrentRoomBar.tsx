@@ -1,15 +1,16 @@
-// components/dashboard/CurrentRoomBar.tsx
-'use client'
-import { usePresence } from '@/components/presence/PresenceProvider'
-import { Button } from '@/components/ui/button'
+'use client';
+
+import { Button } from '@/components/ui/button';
 import { StatusMenu } from '@/components/dashboard/StatusMenu';
+import { useOrgPresence } from '@/components/presence/PresenceProvider';
 
 export function CurrentRoomBar() {
-  const { roomMembers, me, joinRoom } = usePresence()
-  const inRoom = me.roomId !== null
-  const count = roomMembers.size
+  const { me, leaveRoom, roomMembers } = useOrgPresence();
+  const inRoom = !!me?.roomId;
+  if (!inRoom) return null;
 
-  if (!inRoom) return null
+  const count = me?.roomId ? roomMembers(me.roomId).length : 0;
+
   return (
     <div className="sticky top-0 z-30 w-full border-b bg-background/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2">
@@ -19,9 +20,11 @@ export function CurrentRoomBar() {
         </div>
         <div className="flex items-center gap-2">
           <StatusMenu />
-          <Button variant="outline" onClick={() => joinRoom(null)}>Leave room</Button>
+          <Button variant="outline" onClick={() => leaveRoom()}>
+            Leave room
+          </Button>
         </div>
       </div>
     </div>
-  )
+  );
 }

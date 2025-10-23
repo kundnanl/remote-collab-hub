@@ -1,16 +1,22 @@
-'use client'
-import { usePresence } from '@/components/presence/PresenceProvider'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+'use client';
+
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useOrgPresence } from '@/components/presence/PresenceProvider';
+import * as React from 'react';
 
 export function StatusMenu() {
-  const { me, setStatus } = usePresence()
+  const { me, setStatus } = useOrgPresence();
+  const value = me?.status ?? 'online';
 
   return (
-    <Select 
-      defaultValue={me.status} 
-      onValueChange={(v) => setStatus(v as Parameters<typeof setStatus>[0])}
+    <Select
+      defaultValue={value}
+      value={value}
+      onValueChange={(v: 'online' | 'away' | 'dnd') => {
+        void setStatus(v);
+      }}
     >
-      <SelectTrigger className="w-[140px]">
+      <SelectTrigger className="w-[160px]">
         <SelectValue placeholder="Set status" />
       </SelectTrigger>
       <SelectContent>
@@ -19,5 +25,5 @@ export function StatusMenu() {
         <SelectItem value="dnd">Do Not Disturb</SelectItem>
       </SelectContent>
     </Select>
-  )
+  );
 }

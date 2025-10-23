@@ -9,19 +9,19 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  const { userId, redirectToSignIn } = await auth();
+  const { userId, orgId, redirectToSignIn } = await auth();
 
   const pathname = req.nextUrl.pathname;
-
   const isPublicApiCall = pathname.startsWith("/api/trpc/user.");
 
-  // If not signed in → redirect to sign-in
   if (!userId && !isPublicRoute(req) && !isPublicApiCall) {
     return redirectToSignIn({ returnBackUrl: req.url });
   }
 
-  // Otherwise, just continue
-  return NextResponse.next();
+  const res = NextResponse.next();
+  if (orgId) res.headers.set("x-clerk-org-id", orgId);
+
+  return res;
 });
 
 export const config = {

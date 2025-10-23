@@ -6,8 +6,6 @@ const liveblocks = new Liveblocks({
   secret: process.env.LIVEBLOCKS_SECRET_KEY!,
 });
 
-// This endpoint receives { room: string } from the Liveblocks client.
-// It must return an auth token with the allowed room & user info.
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) {

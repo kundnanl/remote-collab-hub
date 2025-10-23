@@ -1,520 +1,215 @@
-"use client";
+'use client'
 
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useCallback,
-} from "react";
-import {
-  joinOrgPresence,
-  joinRoomPresence,
-  OrgPresenceState,
-} from "@/lib/presence";
-import { supabase } from "@/lib/supabaseClient";
-import { trpc } from "@/server/client";
-import { useSimpleToast } from "@/components/ui/simple-toast";
+import * as React from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { supabase } from '@/lib/supabaseClient'
+import { PresenceContextValue, PresenceMeta, MemberPresence, PresenceStatus } from '@/lib/presence-types'
+import { useUser, useOrganization, SignedIn } from '@clerk/nextjs'
 
-type Ctx = {
-  orgId: string;
-  me: OrgPresenceState;
-  orgMembers: Map<string, OrgPresenceState>;
-  roomMembers: Map<string, OrgPresenceState>;
-  currentRoomId: string | null;
-  joinRoom: (roomId: string | null) => Promise<void>;
-  leaveRoom: () => Promise<void>;
-  setStatus: (s: OrgPresenceState["status"]) => Promise<void>;
-};
+const PresenceContext = React.createContext<PresenceContextValue | null>(null)
 
-const PresenceCtx = createContext<Ctx | null>(null);
-export const usePresence = () => {
-  const ctx = useContext(PresenceCtx);
-  if (!ctx) throw new Error("PresenceProvider missing");
-  return ctx;
-};
+type Props = { children: React.ReactNode; orgId: string }
 
-type PresencePayload = {
-  userId?: string;
-  name?: string | null;
-  imageUrl?: string | null;
-  orgId?: string;
-  roomId?: string | null;
-  status?: "online" | "focus" | "dnd";
-  muted?: boolean;
-  handRaised?: boolean;
-  [key: string]: unknown;
-};
-
-type PresenceMeta = {
-  payload?: PresencePayload;
-  [key: string]: unknown;
-};
-
-function presenceToMap(raw: unknown): Map<string, OrgPresenceState> {
-  const map = new Map<string, OrgPresenceState>();
-  const state = raw as Record<
-    string,
-    { metas?: PresenceMeta[] } | PresenceMeta[] | undefined
-  >;
-
-  for (const [key, obj] of Object.entries(state)) {
-    const metas: PresenceMeta[] = Array.isArray(obj)
-      ? (obj as PresenceMeta[])
-      : obj?.metas ?? [];
-
-    if (!metas.length) continue;
-    const meta = metas[metas.length - 1];
-    const payload = meta?.payload ?? {};
-
-    const user: OrgPresenceState = {
-      userId: payload.userId ?? key,
-      name: payload.name ?? null,
-      imageUrl: payload.imageUrl ?? null,
-      orgId: (payload.orgId as string) ?? "",
-      roomId: payload.roomId ?? null,
-      status: payload.status ?? "online",
-      muted: payload.muted ?? false,
-      handRaised: payload.handRaised ?? false,
-    };
-    map.set(user.userId, user);
-  }
-
-  return map;
+function dedupeByUserId(metas: MemberPresence[]): MemberPresence[] {
+    const map = new Map<string, MemberPresence>()
+    for (const m of metas) {
+        const prev = map.get(m.userId)
+        if (!prev) {
+            map.set(m.userId, m)
+        } else {
+            const prevAt = prev.joinedAt ? Date.parse(prev.joinedAt) : 0
+            const curAt = m.joinedAt ? Date.parse(m.joinedAt) : 0
+            const sameRoom = prev.roomId === m.roomId
+            const chooseCurrent =
+                (sameRoom && curAt >= prevAt) ||
+                (!sameRoom && (m.roomId && !prev.roomId ? true : false))
+            if (chooseCurrent) map.set(m.userId, m)
+        }
+    }
+    return [...map.values()]
 }
 
-export function PresenceProvider({
-  orgId,
-  me: initialMe,
-  children,
-}: {
-  orgId: string;
-  me: OrgPresenceState;
-  children: React.ReactNode;
-}) {
-  const { push } = useSimpleToast();
+export function useOrgPresence(): PresenceContextValue {
+    const ctx = React.useContext(PresenceContext)
+    if (!ctx) throw new Error('useOrgPresence must be used within PresenceProvider')
+    return ctx
+}
 
-  // Initialize me with persisted status (client-side)
-  const [me, setMe] = useState<OrgPresenceState>(() => {
-    if (typeof window !== "undefined") {
-      const saved = window.localStorage.getItem("rh:status");
-      if (saved === "online" || saved === "focus" || saved === "dnd") {
-        return { ...initialMe, status: saved };
-      }
-    }
-    return initialMe;
-  });
+export function PresenceProvider({ children, orgId }: Props) {
+    const { user } = useUser()
+    const { organization } = useOrganization()
+    const [ready, setReady] = useState(false)
+    const [me, setMe] = useState<PresenceMeta | null>(null)
+    const [members, setMembers] = useState<MemberPresence[]>([])
 
-  const [orgMembers, setOrgMembers] = useState<Map<string, OrgPresenceState>>(
-    new Map()
-  );
-  const [roomMembers, setRoomMembers] = useState<
-    Map<string, OrgPresenceState>
-  >(new Map());
-  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
+    const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+    const lastRoomStorageKey = `office:lastRoom:${orgId}`
 
-  // Refs for channels and race guards
-  const orgChannelRef = useRef<ReturnType<typeof joinOrgPresence> | null>(
-    null
-  );
-  const roomChannelRef = useRef<ReturnType<typeof joinRoomPresence> | null>(
-    null
-  );
-  const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mountedRef = useRef(true);
+    const initialSelf: PresenceMeta | null = useMemo(() => {
+        if (!user || !organization) return null
+        const lastRoomId =
+            (typeof window !== 'undefined' && localStorage.getItem(lastRoomStorageKey)) || null
+        return {
+            userId: user.id,
+            orgId,
+            name: user.fullName ?? user.primaryEmailAddress?.emailAddress ?? 'User',
+            imageUrl: user.imageUrl ?? null,
+            status: 'online',
+            roomId: lastRoomId,
+            joinedAt: lastRoomId ? new Date().toISOString() : null,
+        }
+    }, [user, organization, orgId])
 
-  // Race guards
-  const joiningRef = useRef(false);
-  const leavingRef = useRef(false);
-  const currentRoomIdRef = useRef<string | null>(null);
+    // Subscribe + full logging
+    useEffect(() => {
+        if (!initialSelf) return
+        console.groupCollapsed(`[Presence] init for org ${orgId}`)
+        console.log('initialSelf', initialSelf)
+        console.groupEnd()
 
-  // tRPC
-  const startOrGet = trpc.rooms.startOrGetActiveSession.useMutation();
-  const endActive = trpc.rooms.endActiveSession.useMutation();
+        const ch = supabase.channel(`org:${orgId}:presence`, {
+            config: { presence: { key: initialSelf.userId } },
+        })
+        channelRef.current = ch
 
-  useEffect(() => {
-    mountedRef.current = true;
-    console.log("[PresenceProvider] mount org", { orgId, me: initialMe });
-    return () => {
-      mountedRef.current = false;
-      console.log("[PresenceProvider] unmount");
-    };
-  }, [orgId, initialMe]);
-
-  // ---------- org presence sync ----------
-  const applyOrgPresence = useCallback(() => {
-    if (!orgChannelRef.current) return;
-    const raw = orgChannelRef.current.presenceState();
-    const map = presenceToMap(raw);
-    if (!mountedRef.current) return;
-    setOrgMembers(map);
-    console.debug("[PresenceProvider] org presence applied", {
-      count: map.size,
-      map,
-    });
-  }, []);
-
-  // ---------- room presence sync ----------
-  const applyRoomPresence = useCallback(
-    async (roomId: string) => {
-      if (!roomChannelRef.current) return;
-      const raw = roomChannelRef.current.presenceState();
-      const next = presenceToMap(raw);
-
-      if (!mountedRef.current) return;
-
-      setRoomMembers((prev) => {
-        const prevCount = prev.size;
-        const nextCount = next.size;
-
-        console.debug("[PresenceProvider] room presence applied", {
-          roomId,
-          prevCount,
-          nextCount,
-          next,
-        });
-
-        // Start session: 0 → 1+
-        if (prevCount === 0 && nextCount >= 1) {
-          startOrGet
-            .mutateAsync({ roomId })
-            .then((res) =>
-              console.log("[PresenceProvider] startOrGet ok", { roomId, res })
-            )
-            .catch((err) =>
-              console.warn("[PresenceProvider] startOrGet failed", err)
-            );
+        const logPresenceState = (label: string) => {
+            const state = ch.presenceState() as Record<string, Array<Record<string, unknown>>>
+            const users = Object.keys(state)
+            console.log(`[Presence] ${label} →`, users.length, 'users:', users)
         }
 
-        // End session: 1+ → 0 (with grace period)
-        if (prevCount > 0 && nextCount === 0) {
-          if (endTimerRef.current) clearTimeout(endTimerRef.current);
-          endTimerRef.current = setTimeout(() => {
-            endActive
-              .mutateAsync({ roomId })
-              .then((res) =>
-                console.log("[PresenceProvider] endActive ok", {
-                  roomId,
-                  res,
-                })
-              )
-              .catch((err) =>
-                console.warn("[PresenceProvider] endActive failed", err)
-              );
-          }, 5000);
+        const handleSync = () => {
+            const state = ch.presenceState() as Record<string, Array<Record<string, unknown>>>
+            const flattened: MemberPresence[] = []
+            for (const [key, metas] of Object.entries(state)) {
+                for (const meta of metas) {
+                    const m = meta as PresenceMeta & { presence_ref?: string; ref?: string }
+                    flattened.push({
+                        userId: m.userId,
+                        orgId: m.orgId,
+                        roomId: m.roomId ?? null,
+                        status: m.status,
+                        name: m.name ?? null,
+                        imageUrl: m.imageUrl ?? null,
+                        joinedAt: m.joinedAt ?? null,
+                        ref: m.presence_ref ?? m.ref ?? key,
+                    })
+                }
+            }
+            setMembers(dedupeByUserId(flattened))
+            logPresenceState('sync')
         }
 
-        // Toast notifications
-        const prevIds = new Set([...prev.keys()]);
-        const currIds = new Set([...next.keys()]);
-        for (const id of currIds) {
-          if (!prevIds.has(id) && id !== me.userId) {
-            const u = next.get(id);
-            if (u) push(`${u.name ?? "Someone"} joined the room`);
-          }
+        ch.on('presence', { event: 'sync' }, handleSync)
+        ch.on('presence', { event: 'join' }, (p) => console.log('[Presence] join', p))
+        ch.on('presence', { event: 'leave' }, (p) => console.log('[Presence] leave', p))
+        ch.on('broadcast', { event: 'debug' }, (payload) => console.log('[Presence] broadcast', payload))
+
+        ch.subscribe(async (status) => {
+            console.log('[Presence] subscription status:', status)
+            if (status === 'SUBSCRIBED') {
+                await new Promise(r => setTimeout(r, 200));
+                await ch.track(initialSelf);
+                console.log('[Presence] tracking started', initialSelf);
+                setMe(initialSelf)
+                setReady(true)
+            } else if (status === 'CHANNEL_ERROR') {
+                console.error('[Presence] Channel error')
+            } else if (status === 'TIMED_OUT') {
+                console.warn('[Presence] Channel timed out')
+            } else if (status === 'CLOSED') {
+                console.warn('[Presence] Channel closed')
+            }
+        })
+
+        return () => {
+            console.log('[Presence] cleanup -> untrack/unsubscribe')
+            setReady(false)
+                ; (async () => {
+                    try {
+                        await ch.untrack()
+                        console.log('[Presence] untracked successfully')
+                    } catch (e) {
+                        console.warn('[Presence] untrack error', e)
+                    }
+                    try {
+                        await ch.unsubscribe()
+                        console.log('[Presence] unsubscribed successfully')
+                    } catch (e) {
+                        console.warn('[Presence] unsubscribe error', e)
+                    }
+                })()
         }
-        for (const id of prevIds) {
-          if (!currIds.has(id) && id !== me.userId) {
-            const u = prev.get(id);
-            if (u) push(`${u.name ?? "Someone"} left the room`);
-          }
-        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialSelf?.userId, orgId])
 
-        return next;
-      });
-    },
-    [me.userId, push, startOrGet, endActive]
-  );
+    const updatePresence = useCallback(
+        async (patch: Partial<PresenceMeta>) => {
+            if (!channelRef.current || !me) return
+            const next: PresenceMeta = { ...me, ...patch }
+            if (typeof window !== 'undefined') {
+                if (next.roomId) localStorage.setItem(lastRoomStorageKey, next.roomId)
+                else localStorage.removeItem(lastRoomStorageKey)
+            }
+            console.log('[Presence] updatePresence', patch)
+            await channelRef.current.track(next)
+            setMe(next)
+        },
+        [me, lastRoomStorageKey]
+    )
 
-  // ---------- mount org presence (PERSISTENT IN LAYOUT) ----------
-  useEffect(() => {
-    const initialState = { ...me, roomId: null };
-    setMe(initialState);
+    const setStatus = useCallback(async (s: PresenceStatus) => {
+        console.log('[Presence] setStatus', s)
+        await updatePresence({ status: s })
+    }, [updatePresence])
 
-    const ch = joinOrgPresence(orgId, initialState);
-    orgChannelRef.current = ch;
+    const joinRoom = useCallback(async (roomId: string) => {
+        console.log('[Presence] joinRoom', roomId)
+        await updatePresence({ roomId, joinedAt: new Date().toISOString() })
+    }, [updatePresence])
 
-    const onSync = () => applyOrgPresence();
-    const onJoin = () => applyOrgPresence();
-    const onLeave = () => applyOrgPresence();
+    const leaveRoom = useCallback(async () => {
+        console.log('[Presence] leaveRoom')
+        await updatePresence({ roomId: null, joinedAt: null })
+    }, [updatePresence])
 
-    ch.on("presence", { event: "sync" }, onSync);
-    ch.on("presence", { event: "join" }, onJoin);
-    ch.on("presence", { event: "leave" }, onLeave);
+    const roomMembers = useCallback(
+        (roomId: string) => members.filter((m) => m.roomId === roomId),
+        [members]
+    )
 
-    // 👇 Broadcast listener: any client who receives this will refresh immediately
-    ch.on("broadcast", { event: "presence-refresh" }, () => {
-      console.debug("[PresenceProvider] org broadcast presence-refresh");
-      onSync();
-    });
+    const liveSince = useCallback(
+        (roomId: string) => {
+            const inRoom = roomMembers(roomId)
+            if (inRoom.length === 0) return null
+            const times = inRoom
+                .map((m) => (m.joinedAt ? Date.parse(m.joinedAt) : Number.POSITIVE_INFINITY))
+                .filter((n) => Number.isFinite(n))
+            if (!times.length) return null
+            return new Date(Math.min(...times))
+        },
+        [roomMembers]
+    )
 
-    return () => {
-      console.log("[PresenceProvider] cleanup org channel");
-      ch.unsubscribe();
-      orgChannelRef.current = null;
-      setOrgMembers(new Map());
-    };
-  }, [orgId, applyOrgPresence]); // runs once per org
+    const value = useMemo<PresenceContextValue>(
+        () => ({
+            ready,
+            me,
+            setStatus,
+            joinRoom,
+            leaveRoom,
+            orgMembers: members,
+            roomMembers,
+            liveSince,
+        }),
+        [ready, me, setStatus, joinRoom, leaveRoom, members, roomMembers, liveSince]
+    )
 
-  // Helper: send broadcast nudge (fire-and-forget)
-  const nudgeOrgPresence = useCallback(() => {
-    const ch = orgChannelRef.current;
-    if (!ch) return;
-    try {
-      // Supabase v2 broadcast:
-      ch.send({
-        type: "broadcast",
-        event: "presence-refresh",
-        payload: { ts: Date.now() },
-      });
-    } catch (e) {
-      console.warn("[PresenceProvider] broadcast presence-refresh failed", e);
-    }
-  }, []);
-
-  // ---------- leave room ----------
-  const leaveRoom = useCallback(async () => {
-    if (leavingRef.current) return;
-    leavingRef.current = true;
-
-    try {
-      const channel = roomChannelRef.current;
-      const roomId = currentRoomIdRef.current;
-
-      console.log("[PresenceProvider] leaveRoom called", { roomId });
-
-      if (!channel || !roomId) {
-        setRoomMembers(new Map());
-        setCurrentRoomId(null);
-        currentRoomIdRef.current = null;
-        return;
-      }
-
-      // If last person, close session immediately
-      if (roomMembers.size === 1) {
-        try {
-          const res = await endActive.mutateAsync({ roomId });
-          console.log("[PresenceProvider] endActive on single", { roomId, res });
-        } catch (e) {
-          console.warn("[PresenceProvider] endActive error", e);
-        }
-      }
-
-      await channel.unsubscribe();
-      roomChannelRef.current = null;
-
-      // remove listeners
-      window.removeEventListener("beforeunload", handleUnload);
-      document.removeEventListener("visibilitychange", handleVisibility);
-
-      setCurrentRoomId(null);
-      currentRoomIdRef.current = null;
-      setRoomMembers(new Map());
-
-      const updatedMe = { ...me, roomId: null };
-      setMe(updatedMe);
-      if (orgChannelRef.current) {
-        await orgChannelRef.current.track(updatedMe);
-        console.debug("[PresenceProvider] org track after leave", updatedMe);
-        nudgeOrgPresence(); // 👈 broadcast so others refresh roster
-      }
-    } finally {
-      leavingRef.current = false;
-    }
-  }, [endActive, me, roomMembers.size, nudgeOrgPresence]);
-
-  const handleUnload = useCallback(async () => {
-    if (roomMembers.size === 1 && currentRoomIdRef.current) {
-      try {
-        const res = await endActive.mutateAsync({
-          roomId: currentRoomIdRef.current,
-        });
-        console.log("[PresenceProvider] handleUnload endActive", {
-          roomId: currentRoomIdRef.current,
-          res,
-        });
-      } catch (e) {
-        console.warn("[PresenceProvider] handleUnload error", e);
-      }
-    }
-  }, [roomMembers.size, endActive]);
-
-  const handleVisibility = useCallback(() => {
-    if (document.visibilityState === "hidden") {
-      handleUnload();
-    }
-  }, [handleUnload]);
-
-  // ---------- join room ----------
-  const joinRoom = useCallback(
-    async (roomId: string | null) => {
-      // Prevent concurrent joins
-      if (joiningRef.current) {
-        console.log("[PresenceProvider] joinRoom ignored (joining)");
-        return;
-      }
-
-      // If same target as current (ref), do nothing
-      if (roomId === currentRoomIdRef.current) {
-        console.log("[PresenceProvider] joinRoom ignored (same roomId)", {
-          roomId,
-        });
-        return;
-      }
-
-      joiningRef.current = true;
-      try {
-        // Switch: ensure previous channel is cleaned
-        if (roomChannelRef.current) {
-          await leaveRoom();
-        }
-
-        setCurrentRoomId(roomId);
-        currentRoomIdRef.current = roomId;
-
-        const updatedMe = { ...me, roomId };
-        setMe(updatedMe);
-
-        if (orgChannelRef.current) {
-          await orgChannelRef.current.track(updatedMe);
-          console.debug("[PresenceProvider] org track after join", updatedMe);
-          nudgeOrgPresence(); // 👈 broadcast so others refresh roster
-        }
-
-        if (!roomId) return;
-
-        const ch = joinRoomPresence(orgId, roomId, updatedMe);
-        roomChannelRef.current = ch;
-
-        const onSync = () => applyRoomPresence(roomId);
-        const onJoin = () => applyRoomPresence(roomId);
-        const onLeave = () => applyRoomPresence(roomId);
-
-        ch.on("presence", { event: "sync" }, onSync);
-        ch.on("presence", { event: "join" }, onJoin);
-        ch.on("presence", { event: "leave" }, onLeave);
-
-        // Initial sync (slight delay so state is populated)
-        setTimeout(onSync, 150);
-
-        // attach global handlers (idempotent because we clean on leave)
-        window.addEventListener("beforeunload", handleUnload);
-        document.addEventListener("visibilitychange", handleVisibility);
-
-        console.log("[PresenceProvider] joined room", { roomId });
-      } finally {
-        joiningRef.current = false;
-      }
-    },
-    [
-      applyRoomPresence,
-      leaveRoom,
-      orgId,
-      me,
-      handleUnload,
-      handleVisibility,
-      nudgeOrgPresence,
-    ]
-  );
-
-  // ---------- set status ----------
-  const setStatus = useCallback(
-    async (status: OrgPresenceState["status"]) => {
-      const updatedMe = { ...me, status };
-      setMe(updatedMe);
-
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem("rh:status", status);
-        } catch {}
-      }
-
-      if (orgChannelRef.current) {
-        await orgChannelRef.current.track(updatedMe);
-        console.debug("[PresenceProvider] org track status", updatedMe);
-        nudgeOrgPresence(); 
-      }
-      if (roomChannelRef.current) {
-        await roomChannelRef.current.track(updatedMe);
-        console.debug("[PresenceProvider] room track status", updatedMe);
-      }
-
-      // Optimistic local reflect
-      setOrgMembers((prev) => {
-        const next = new Map(prev);
-        next.set(updatedMe.userId, {
-          ...(next.get(updatedMe.userId) ?? updatedMe),
-          ...updatedMe,
-        });
-        return next;
-      });
-
-      if (currentRoomIdRef.current) {
-        setRoomMembers((prev) => {
-          const next = new Map(prev);
-          if (next.has(updatedMe.userId)) {
-            next.set(updatedMe.userId, {
-              ...(next.get(updatedMe.userId) as OrgPresenceState),
-              ...updatedMe,
-            });
-          }
-          return next;
-        });
-      }
-    },
-    [me, nudgeOrgPresence]
-  );
-
-  // ---------- connection recovery ----------
-  useEffect(() => {
-    const channel = supabase
-      .channel("connection-monitor")
-      .on("system", { event: "recovered" }, async () => {
-        console.log("[PresenceProvider] realtime recovered, retracking");
-        if (orgChannelRef.current) await orgChannelRef.current.track(me);
-        if (roomChannelRef.current) await roomChannelRef.current.track(me);
-        nudgeOrgPresence();
-      })
-      .on("system", { event: "reconnect" }, async () => {
-        console.log("[PresenceProvider] realtime reconnect, retracking");
-        if (orgChannelRef.current) await orgChannelRef.current.track(me);
-        if (roomChannelRef.current) await roomChannelRef.current.track(me);
-        nudgeOrgPresence();
-      })
-      .subscribe((status) => {
-        console.log("[PresenceProvider] connection-monitor status", status);
-      });
-
-    return () => {
-      console.log("[PresenceProvider] connection-monitor unsubscribe");
-      channel.unsubscribe();
-    };
-  }, [me, nudgeOrgPresence]);
-
-  const value = useMemo<Ctx>(
-    () => ({
-      orgId,
-      me,
-      orgMembers,
-      roomMembers,
-      currentRoomId,
-      joinRoom,
-      leaveRoom,
-      setStatus,
-    }),
-    [
-      orgId,
-      me,
-      orgMembers,
-      roomMembers,
-      currentRoomId,
-      joinRoom,
-      leaveRoom,
-      setStatus,
-    ]
-  );
-
-  return <PresenceCtx.Provider value={value}>{children}</PresenceCtx.Provider>;
+    return (
+        <SignedIn>
+            <PresenceContext.Provider value={value}>
+                {children}
+            </PresenceContext.Provider>
+        </SignedIn>
+    )
 }
