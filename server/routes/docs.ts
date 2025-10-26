@@ -127,4 +127,21 @@ export const docsRouter = router({
 
       return { success: true, updatedAt: doc.updatedAt };
     }),
+
+  recent: protectedProcedure
+    .input(z.object({ orgId: z.string(), limit: z.number().min(1).max(50).default(8) }))
+    .query(async ({ input, ctx }) => {
+      // ensure org is the same as ctx
+      if (!ctx.orgId || ctx.orgId !== input.orgId) throw new TRPCError({ code: "FORBIDDEN" });
+
+      const docs = await prisma.document.findMany({
+        where: { orgId: input.orgId },
+        select: { id: true, title: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+        take: input.limit,
+      });
+
+      return { docs };
+    }),
+
 });

@@ -21,7 +21,7 @@ export default async function TasksPage({
   if (!userId || !orgId) redirect("/");
 
   const caller = await createCaller();
-  
+
   // Ensure a default board + columns exist
   const board = await caller.boards.createDefaultIfMissing({ orgId });
 
@@ -61,8 +61,8 @@ export default async function TasksPage({
   const backlogCount = safeTasks.filter((t) => !t.sprintId).length;
 
   return (
-    <div className="p-6">
-      <div className="mb-4">
+    <div className="space-y-6 overflow-x-hidden">
+      <div>
         <div className="text-xs uppercase tracking-wider text-muted-foreground">Workspace</div>
         <h1 className="text-2xl font-semibold">Tasks</h1>
       </div>

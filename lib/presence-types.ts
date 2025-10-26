@@ -7,12 +7,13 @@ export type PresenceMeta = {
   orgId: string;
   roomId: string | null;
   status: PresenceStatus;
+  page?: string | null;      // 'dashboard' | 'office' | 'docs' | 'tasks' | ...
   name?: string | null;
   imageUrl?: string | null;
-  joinedAt?: string | null; // ISO time when user joined current room
+  joinedAt?: string | null;  // ISO time when user joined current room
 };
 
-export type MemberPresence = PresenceMeta & { ref: string }; // ref = Supabase presence meta ref
+export type MemberPresence = PresenceMeta & { ref: string };
 
 export type PresenceContextValue = {
   ready: boolean;
@@ -20,7 +21,8 @@ export type PresenceContextValue = {
   setStatus: (s: PresenceStatus) => Promise<void>;
   joinRoom: (roomId: string) => Promise<void>;
   leaveRoom: () => Promise<void>;
-  orgMembers: MemberPresence[]; // all metas in org channel
+  setPage: (page: string | null) => Promise<void>;
+  orgMembers: MemberPresence[];
   roomMembers: (roomId: string) => MemberPresence[];
   liveSince: (roomId: string) => Date | null;
 };

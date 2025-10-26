@@ -63,7 +63,7 @@ export const sprintsRouter = router({
       });
     }),
 
-  complete: protectedProcedure // rename from "close" for clarity
+  complete: protectedProcedure
     .input(z.object({ sprintId: z.string(), orgId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await ensureMember(ctx, input.orgId);
@@ -84,6 +84,7 @@ export const sprintsRouter = router({
       goal: z.string().max(500).nullable().optional(),
       startDate: z.string().datetime().nullable().optional(),
       endDate: z.string().datetime().nullable().optional(),
+      velocityTarget: z.number().int().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       await ensureMember(ctx, input.orgId);
@@ -95,11 +96,19 @@ export const sprintsRouter = router({
           startDate:
             input.startDate === undefined
               ? undefined
-              : input.startDate ? new Date(input.startDate) : null,
+              : input.startDate
+                ? new Date(input.startDate)
+                : null,
           endDate:
             input.endDate === undefined
               ? undefined
-              : input.endDate ? new Date(input.endDate) : null,
+              : input.endDate
+                ? new Date(input.endDate)
+                : null,
+          velocityTarget:
+            input.velocityTarget === undefined
+              ? undefined
+              : input.velocityTarget ?? null,
         },
       });
     }),
