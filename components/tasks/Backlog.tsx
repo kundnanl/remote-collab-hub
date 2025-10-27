@@ -47,6 +47,7 @@ import {
   SquareGanttChart,
   EllipsisVertical,
   Loader2,
+  FileText,
 } from "lucide-react";
 
 import { format } from "date-fns";
@@ -55,6 +56,7 @@ import { TaskRow } from "./TaskRow";
 import TaskDrawer from "./TaskDrawer";
 import { NewTaskDialog } from "./NewTaskDialog";
 import { SprintDialog } from "@/components/tasks/SprintDialog";
+import Link from "next/link";
 
 type Task = RouterOutputs["tasks"]["list"][number];
 type Sprint = RouterOutputs["sprints"]["list"][number];
@@ -403,6 +405,103 @@ function SprintHeader({
     </div>
   );
 }
+
+
+function ClosedSprintCard({
+  orgId,
+  sprint,
+  tasks,
+  columns,
+  assignees,
+  selectedTasks,
+  toggleTaskSel,
+  openTask,
+}: {
+  orgId: string;
+  sprint: Sprint;
+  tasks: Task[];
+  columns: Column[];
+  assignees: Assignee[];
+  selectedTasks: Set<string>;
+  toggleTaskSel: (id: string, on: boolean) => void;
+  openTask: (id: string) => void;
+}) {
+  const reportQ = trpc.reports.getSprintRun.useQuery(
+    { orgId, sprintId: sprint.id },
+    { staleTime: 15_000 }
+  );
+  const gen = trpc.reports.generateSprintReport.useMutation();
+
+  const onClickGenerate = async () => {
+    await gen.mutateAsync({ orgId, sprintId: sprint.id });
+    reportQ.refetch();
+  };
+
+  return (
+    <Card className="rounded-xl p-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{sprint.name}</span>
+          <Badge variant="secondary" className="capitalize">
+            {sprint.status.toLowerCase()}
+          </Badge>
+          <span className="text-xs text-muted-foreground ml-2">
+            {sprint.startDate ? format(new Date(sprint.startDate), "MMM d") : "—"} →{" "}
+            {sprint.endDate ? format(new Date(sprint.endDate), "MMM d") : "—"}
+          </span>
+        </div>
+
+        {/* Report actions */}
+        {reportQ.data ? (
+          <Link href={`/dashboard/reports/run/${reportQ.data.id}`}>
+            <Button size="sm" variant="ghost" className="gap-1">
+              <FileText className="h-4 w-4" /> View report
+            </Button>
+          </Link>
+        ) : (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1"
+            disabled={gen.isPending}
+            onClick={onClickGenerate}
+            title="Generate sprint report"
+          >
+            {gen.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Generating…
+              </>
+            ) : (
+              <>Generate report</>
+            )}
+          </Button>
+        )}
+      </div>
+
+      <div className="mt-3 rounded-md border bg-card">
+        {tasks.length ? (
+          tasks.map((t) => (
+            <TaskRow
+              key={t.id}
+              task={t}
+              columns={columns}
+              assignees={assignees}
+              selected={selectedTasks.has(t.id)}
+              onToggleSelect={(on) => toggleTaskSel(t.id, on)}
+              onOpen={openTask}
+              recentlyChanged={false}
+            />
+          ))
+        ) : (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            No tasks.
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 
 /* ================================ Backlog ================================ */
 
@@ -950,54 +1049,24 @@ export default function Backlog({
           </div>
         </Card>
 
-        {/* Closed sprints (collapsed) */}
         {closed.length > 0 && (
           <>
             <Separator />
-            <SectionHeader title="Closed sprints" subtitle="Read-only history." icon={CalendarIcon} />
+            <SectionHeader title="Closed sprints" subtitle="Read-only history and reports." icon={CalendarIcon} />
             <div className="space-y-3">
-              {closed.map((s) => {
-                const list = (tasksBySprint.get(s.id) ?? []).filter(filterTask);
-                return (
-                  <Card key={s.id} className="rounded-xl p-5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{s.name}</span>
-                        <Badge variant="secondary" className="capitalize">
-                          {s.status.toLowerCase()}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground ml-2">
-                          {s.startDate ? format(new Date(s.startDate), "MMM d") : "—"} →{" "}
-                          {s.endDate ? format(new Date(s.endDate), "MMM d") : "—"}
-                        </span>
-                      </div>
-                      <Button variant="ghost" size="sm" disabled>
-                        View report
-                      </Button>
-                    </div>
-                    <div className="mt-3 rounded-md border bg-card">
-                      {list.length ? (
-                        list.map((t) => (
-                          <TaskRow
-                            key={t.id}
-                            task={t}
-                            columns={columns}
-                            assignees={assignees}
-                            selected={selectedTasks.has(t.id)}
-                            onToggleSelect={(on) => toggleTaskSel(t.id, on)}
-                            onOpen={openTask}
-                            recentlyChanged={false}
-                          />
-                        ))
-                      ) : (
-                        <div className="py-6 text-center text-sm text-muted-foreground">
-                          No tasks.
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                );
-              })}
+              {closed.map((s) => (
+                <ClosedSprintCard
+                  key={s.id}
+                  orgId={orgId}
+                  sprint={s}
+                  tasks={(tasksBySprint.get(s.id) ?? []).filter(filterTask)}
+                  columns={columns}
+                  assignees={assignees}
+                  selectedTasks={selectedTasks}
+                  toggleTaskSel={toggleTaskSel}
+                  openTask={openTask}
+                />
+              ))}
             </div>
           </>
         )}

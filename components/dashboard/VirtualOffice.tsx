@@ -3,16 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
-import {
-  MoreHorizontal,
-  Video,
-  LogOut,
-  Pencil,
-  Link as LinkIcon,
-  Trash2,
-  Users,
-} from 'lucide-react';
-
+import { MoreHorizontal, Video, LogOut, Pencil, Link as LinkIcon, Trash2, Users } from 'lucide-react';
 import { trpc } from '@/server/client';
 import type { RouterOutputs } from '@/server/client';
 type RoomType = RouterOutputs['rooms']['listByOrg'][number];
@@ -39,10 +30,9 @@ function LiveBadge({ since }: { since: Date | null }) {
   return (
     <span
       className={badge(
-        'border-emerald-300/50 text-emerald-800 dark:text-emerald-300 dark:border-emerald-900/60' +
-          ' shadow-[0_0_0_3px_rgba(16,185,129,0.08)]'
+        'border-emerald-300/50 text-emerald-800 dark:text-emerald-300 dark:border-emerald-900/60 shadow-[0_0_0_3px_rgba(16,185,129,0.08)]'
       )}
-      title={`Live since ${since.toLocaleString()}`}
+      title={since ? `Live since ${since.toLocaleString()}` : undefined}
     >
       • Live {`• ${formatDistanceToNow(since, { addSuffix: true })}`}
     </span>
@@ -69,9 +59,7 @@ function Header({ orgId }: { orgId: string }) {
     <div className="flex items-center justify-between">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Virtual office</h1>
-        <p className="text-sm text-muted-foreground">
-          Jump into rooms, see who’s around, and collaborate fast.
-        </p>
+        <p className="text-sm text-muted-foreground">Jump into rooms, see who’s around, and collaborate fast.</p>
       </div>
       <CreateRoomDialog orgId={orgId} />
     </div>
@@ -83,28 +71,20 @@ function Occupants({
 }: {
   occupants: Array<{ userId: string; ref: string; name?: string | null; imageUrl?: string | null }>;
 }) {
-  if (occupants.length === 0) {
-    return <span className="text-xs text-muted-foreground">No one here yet</span>;
-  }
+  if (occupants.length === 0) return <span className="text-xs text-muted-foreground">No one here yet</span>;
 
   return (
     <div className="flex items-center gap-2">
       <div className="flex -space-x-2">
         {occupants.slice(0, 5).map((o) => (
-          <Avatar
-            key={o.userId + o.ref}
-            className="h-7 w-7 ring-2 ring-white dark:ring-slate-900"
-            title={o.name ?? 'User'}
-          >
+          <Avatar key={o.userId + o.ref} className="h-7 w-7 ring-2 ring-white dark:ring-slate-900" title={o.name ?? 'User'}>
             <AvatarImage src={o.imageUrl ?? undefined} />
             <AvatarFallback>{o.name?.[0] ?? 'U'}</AvatarFallback>
           </Avatar>
         ))}
       </div>
       {occupants.length > 5 && (
-        <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">
-          +{occupants.length - 5}
-        </span>
+        <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">+{occupants.length - 5}</span>
       )}
       <span className="flex items-center gap-1 text-xs text-muted-foreground">
         <Users className="h-3.5 w-3.5" />
@@ -124,7 +104,6 @@ function OfficeGrid({
   const utils = trpc.useUtils();
   const router = useRouter();
   const roomsQ = trpc.rooms.listByOrg.useQuery({ orgId }, { initialData: initialRooms });
-
   const { me, roomMembers, liveSince, leaveRoom, joinRoom } = useOrgPresence();
 
   const removeRoom = trpc.rooms.remove.useMutation({
@@ -148,7 +127,6 @@ function OfficeGrid({
               'transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900/70',
             ].join(' ')}
           >
-            {/* subtle gradient accent */}
             <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
 
             <div className="flex items-start justify-between gap-2">
@@ -160,9 +138,7 @@ function OfficeGrid({
                   </span>
                   {occupants.length > 0 && <LiveBadge since={since} />}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {'Quick huddles, syncs, and deep work.'}
-                </p>
+                <p className="text-xs text-muted-foreground">Quick huddles, syncs, and deep work.</p>
               </div>
 
               <div className="flex items-center gap-1">
@@ -170,8 +146,8 @@ function OfficeGrid({
                   <Button
                     size="sm"
                     onClick={() => {
-                      // optimistic feedback
-                      joinRoom(room.id).then(() => {
+                      // optimistic presence, then navigate
+                      joinRoom(room.id).finally(() => {
                         router.push(`/dashboard/office/room/${room.id}`);
                       });
                     }}
@@ -228,7 +204,6 @@ function OfficeGrid({
               </div>
             </div>
 
-            {/* occupants */}
             <div className="mt-4">
               <Occupants occupants={occupants} />
             </div>

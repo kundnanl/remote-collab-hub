@@ -1,47 +1,47 @@
-// prisma/seed.ts
-import { PrismaClient, TaskStatus } from "@prisma/client";
+import { PrismaClient, ReportTemplateKind, ReportFormat } from "@prisma/client";
 const prisma = new PrismaClient();
 
-async function ensureDefaultBoardForOrg(orgId: string) {
-  let board = await prisma.board.findFirst({ where: { orgId, name: "Default" } });
-  if (!board) {
-    board = await prisma.board.create({ data: { orgId, name: "Default" } });
-  }
-  const defaults: { title: string; status: TaskStatus; position: number }[] = [
-    { title: "To do",        status: "TODO",        position: 0 },
-    { title: "In progress",  status: "IN_PROGRESS", position: 1 },
-    { title: "Review",       status: "REVIEW",      position: 2 },
-    { title: "Done",         status: "DONE",        position: 3 },
-  ];
-  for (const col of defaults) {
-    const exists = await prisma.boardColumn.findFirst({
-      where: { boardId: board.id, status: col.status },
+async function main() {
+  console.log("🌱 Seeding default sprint templates for all orgs...");
+
+  const orgs = await prisma.organization.findMany();
+
+  for (const org of orgs) {
+    const existing = await prisma.reportTemplate.findFirst({
+      where: { orgId: org.clerkOrgId, kind: ReportTemplateKind.SPRINT_SUMMARY },
     });
-    if (!exists) {
-      await prisma.boardColumn.create({
+
+    if (!existing) {
+      await prisma.reportTemplate.create({
         data: {
-          boardId: board.id,
-          title: col.title,
-          status: col.status,
-          position: col.position,
+          orgId: org.clerkOrgId,
+          name: "Default Sprint Summary",
+          kind: ReportTemplateKind.SPRINT_SUMMARY,
+          description: "Generates a sprint summary with velocity, completion %, blockers, and participants.",
+          format: ReportFormat.HTML,
+          config: {
+            sections: {
+              overview: true,
+              burndown: true,
+              completed: true,
+              inProgress: true,
+              blockers: true,
+              assignees: true,
+            },
+            riskThresholdPct: 60,
+          },
         },
       });
+      console.log(`✅ Seeded for org ${org.name} (${org.clerkOrgId})`);
+    } else {
+      console.log(`✅ Template already exists for ${org.name}`);
     }
   }
 }
 
-async function main() {
-  const orgs = await prisma.organization.findMany({ select: { clerkOrgId: true } });
-  for (const o of orgs) {
-    await ensureDefaultBoardForOrg(o.clerkOrgId);
-  }
-}
-
 main()
+  .then(() => prisma.$disconnect())
   .catch((e) => {
     console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+    prisma.$disconnect();
   });

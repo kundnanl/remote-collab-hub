@@ -9,6 +9,7 @@ import { tasksRouter } from "@/server/routes/tasks";
 import { sprintsRouter } from "@/server/routes/sprints";
 import { rtcRouter } from "@/server/routes/rtc";
 import { whiteboardsRouter } from "@/server/routes/whiteboard";
+import { reportsRouter } from "@/server/routes/reports";
 
 
 export const appRouter = router({
@@ -21,6 +22,7 @@ export const appRouter = router({
   sprints: sprintsRouter,
   rtc: rtcRouter,
   whiteboard: whiteboardsRouter,
+  reports: reportsRouter,
 });
 
 export type AppRouter = typeof appRouter;

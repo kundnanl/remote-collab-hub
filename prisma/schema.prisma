@@ -51,6 +51,12 @@ model Organization {
   taskRelations  TaskRelation[]
   taskComments   TaskComment[]
   taskActivities TaskActivity[]
+
+  // --- Report-related back relations ---
+  reportTemplates   ReportTemplate[]
+  reportRuns        ReportRun[]
+  reportDeliveries  ReportDelivery[] @relation("OrganizationReportDeliveries")
+  scheduledReports  ScheduledReport[]
 }
 
 model OrganizationMember {
@@ -112,9 +118,9 @@ model Room {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   rtcProvider  RTCProvider  @default(DAILY)
-  rtcRoomName  String? // Daily room name (slug)
-  rtcRoomUrl   String? // Daily room URL (safe to show in UI)
-  // relations
+  rtcRoomName  String?
+  rtcRoomUrl   String?
+
   recordings   Recording[]
   whiteboards  Whiteboard[]
 
@@ -217,15 +223,17 @@ model Sprint {
   id             String       @id @default(cuid())
   orgId          String
   name           String
-  goal           String? // optional sprint goal/description
+  goal           String?
   startDate      DateTime?
   endDate        DateTime?
   status         SprintStatus @default(PLANNED)
   velocityTarget Int?
 
-  // relations
   org   Organization @relation(fields: [orgId], references: [clerkOrgId])
   tasks Task[]
+
+  // --- Report back relation ---
+  reportRuns ReportRun[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -268,11 +276,11 @@ model Task {
   description String?
   priority    TaskPriority @default(MEDIUM)
   type        TaskType     @default(FEATURE)
-  position    Int          @default(0) // ordering within a column
-  createdBy   String // User.clerkId
+  position    Int          @default(0)
+  createdBy   String
   assigneeId  String?
   sprintId    String?
-  columnId    String? // NEW: BoardColumn reference
+  columnId    String?
   dueDate     DateTime?
   startDate   DateTime?
   estimate    Int?
@@ -342,4 +350,108 @@ model TaskActivity {
 
   @@index([taskId, createdAt])
   @@index([orgId, type])
+}
+
+// ===== Reporting Enums =====
+enum ReportFormat {
+  HTML
+  PDF
+}
+
+enum ReportRunStatus {
+  QUEUED
+  GENERATING
+  READY
+  FAILED
+}
+
+enum ReportTemplateKind {
+  SPRINT_SUMMARY
+  // future: WEEKLY_ORG, MEMBER_SUMMARY, etc
+}
+
+enum DeliveryChannel {
+  EMAIL
+  SLACK
+}
+
+// ===== Reporting Models =====
+model ReportTemplate {
+  id          String             @id @default(cuid())
+  orgId       String
+  name        String
+  kind        ReportTemplateKind
+  description String?
+  format      ReportFormat       @default(HTML)
+  config      Json               @default("{}")
+  active      Boolean            @default(true)
+
+  organization Organization      @relation(fields: [orgId], references: [clerkOrgId])
+  runs        ReportRun[]
+  schedules   ScheduledReport[]
+
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([orgId, kind])
+}
+
+model ReportRun {
+  id            String           @id @default(cuid())
+  orgId         String
+  templateId    String
+  sprintId      String?
+  status        ReportRunStatus  @default(QUEUED)
+  format        ReportFormat     @default(HTML)
+  data          Json             @default("{}")
+  html          String?
+  pdfUrl        String?
+  error         String?
+  createdAt     DateTime         @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+
+  template      ReportTemplate   @relation(fields: [templateId], references: [id])
+  organization  Organization     @relation(fields: [orgId], references: [clerkOrgId])
+  sprint        Sprint?          @relation(fields: [sprintId], references: [id])
+  deliveries    ReportDelivery[]
+
+  @@index([orgId, templateId, createdAt])
+  @@index([sprintId])
+}
+
+model ReportDelivery {
+  id        String          @id @default(cuid())
+  runId     String
+  orgId     String
+  channel   DeliveryChannel
+  target    String
+  status    String          @default("PENDING")
+  error     String?
+  sentAt    DateTime?
+
+  // relations
+  run           ReportRun       @relation(fields: [runId], references: [id])
+  organization  Organization    @relation("OrganizationReportDeliveries", fields: [orgId], references: [clerkOrgId])
+
+  @@index([runId, channel])
+  @@index([orgId])
+}
+
+model ScheduledReport {
+  id          String             @id @default(cuid())
+  orgId       String
+  templateId  String
+  timezone    String             @default("UTC")
+  cron        String
+  active      Boolean            @default(true)
+  channels    Json               @default("[]")
+  lastRunAt   DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  organization Organization      @relation(fields: [orgId], references: [clerkOrgId])
+  template     ReportTemplate    @relation(fields: [templateId], references: [id])
+
+  @@index([orgId, templateId, active])
 }
