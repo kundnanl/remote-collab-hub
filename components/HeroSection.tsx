@@ -17,7 +17,7 @@ const HeroSection = () => {
     const router = useRouter()
 
     return (
-        <section className="min-h-screen px-6 md:px-12 lg:px-24 py-24 text-gray-900">
+        <section className="px-6 md:px-12 lg:px-24 py-24 text-gray-900">
             {showLoader && <FullPageLoader />}
           <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center">
             {/* Text Block */}
