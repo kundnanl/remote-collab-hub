@@ -2,7 +2,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { createCaller } from "@/server";
-import ClientPresenceWrapper from "@/app/dashboard/office/presence-wrapper"; // you already have this
 import DashboardHome from "@/components/dashboard/DashboardHome";
 
 export default async function DashboardPage() {
@@ -38,7 +37,6 @@ export default async function DashboardPage() {
   const inProgress = safeTasks.filter((t) => t.columnId !== null); // heuristic for “on the board”
 
   return (
-    <ClientPresenceWrapper orgId={orgId}>
       <DashboardHome
         orgId={orgId}
         overdue={overdue.slice(0, 10)}
@@ -46,6 +44,5 @@ export default async function DashboardPage() {
         upcoming={upcoming.slice(0, 10)}
         inProgress={inProgress.slice(0, 10)}
       />
-    </ClientPresenceWrapper>
   );
 }

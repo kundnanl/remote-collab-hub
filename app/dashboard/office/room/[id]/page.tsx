@@ -1,16 +1,27 @@
 'use client';
-
 import * as React from 'react';
 import { useParams } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BoardPane from '@/components/whiteboard/BoardPane';
 import { RoomSidebar } from '@/components/dashboard/RoomSidebar';
 import { OfficeCall } from '@/components/rtc/OfficeCall';
+import { useOrgPresence } from '@/components/presence/PresenceProvider';
 
 export default function OfficeRoomPage() {
   const params = useParams<{ id: string }>();
   const roomId = params.id;
   const [tab, setTab] = React.useState<'call' | 'board'>('call');
+  const { joinRoom, leaveRoom, setPage } = useOrgPresence();
+
+  React.useEffect(() => {
+    if (!roomId) return;
+    joinRoom(roomId);
+    setPage('office');
+    return () => {
+      leaveRoom();
+      setPage(null);
+    };
+  }, [roomId]);
 
   const handleTabChange = React.useCallback((value: string) => {
     if (value === 'call' || value === 'board') setTab(value);
@@ -20,7 +31,6 @@ export default function OfficeRoomPage() {
     <div className="grid lg:grid-cols-[1fr_280px] h-[100dvh]">
       <div className="min-w-0 flex flex-col">
         <div className="flex items-center border-b px-4 h-12">
-          {/* ✅ Type-safe tab switching */}
           <Tabs value={tab} onValueChange={handleTabChange}>
             <TabsList>
               <TabsTrigger value="call">Call</TabsTrigger>
@@ -31,8 +41,6 @@ export default function OfficeRoomPage() {
 
         <div className="relative flex-1">
           <OfficeCall roomId={roomId} hidden={tab !== 'call'} />
-
-          {/* Whiteboard tab container */}
           <div
             className={
               tab === 'board'

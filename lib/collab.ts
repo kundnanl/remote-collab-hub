@@ -4,7 +4,7 @@ import { WebsocketProvider } from 'y-websocket'
 export const createYDoc = (roomName: string) => {
   const ydoc = new Y.Doc()
   const provider = new WebsocketProvider(
-    'wss://your-server.com', 
+    'wss://remote-collab-hub.work', 
     roomName,
     ydoc
   )

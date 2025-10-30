@@ -58,57 +58,72 @@ export const docsRouter = router({
     }),
 
   getMyDocuments: protectedProcedure.query(async ({ ctx }) => {
-    const { userId } = ctx;
+    const { userId, orgId } = ctx;
 
-    if (!userId) {
-      throw new Error("No UserId found in DB");
-    }
+    if (!userId) throw new Error("No UserId found in context");
+    if (!orgId) throw new Error("No organization context found");
 
-    const docs = await prisma.permission.findMany({
+    const docs = await prisma.document.findMany({
       where: {
-        userId,
+        OR: [
+          { ownerId: userId },
+          { orgId },
+        ],
       },
       include: {
-        document: true,
+        permissions: true,
       },
       orderBy: {
-        document: {
-          updatedAt: "desc",
-        },
+        updatedAt: "desc",
       },
     });
 
-    return docs.map((perm) => ({
-      id: perm.document.id,
-      title: perm.document.title,
-      createdAt: perm.document.createdAt,
-      role: perm.role,
-      updatedAt: perm.document.updatedAt,
-    }));
+    return docs.map((doc) => {
+      const myPerm = doc.permissions.find((p) => p.userId === userId);
+
+      return {
+        id: doc.id,
+        title: doc.title,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+        role: myPerm?.role ?? (doc.ownerId === userId ? "OWNER" : "VIEWER"),
+      };
+    });
   }),
 
   getDocumentById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
+      const { userId, orgId } = ctx;
+
+      if (!userId) throw new TRPCError({ code: "UNAUTHORIZED" });
+      if (!orgId) throw new TRPCError({ code: "BAD_REQUEST", message: "Missing org context" });
+
       const doc = await prisma.document.findUnique({
         where: { id: input.id },
-        include: {
-          permissions: true,
-        },
+        include: { permissions: true },
       });
 
       if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
 
-      const permission = doc.permissions.find(
-        (p) => p.userId === ctx.auth.userId
-      );
-      if (!permission) throw new TRPCError({ code: "FORBIDDEN" });
+      const permission = doc.permissions.find((p) => p.userId === userId);
+
+      const isOwner = doc.ownerId === userId;
+      const sameOrg = doc.orgId === orgId;
+
+      if (!isOwner && !permission && !sameOrg) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this document." });
+      }
 
       return {
         id: doc.id,
         title: doc.title,
         content: doc.content,
-        canEdit: permission.role === "OWNER" || permission.role === "EDITOR",
+        canEdit:
+          isOwner ||
+          permission?.role === "EDITOR" ||
+          permission?.role === "OWNER" ||
+          (doc.orgId === orgId),
       };
     }),
 

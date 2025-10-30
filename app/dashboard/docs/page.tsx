@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 const filters = ["ALL", "OWNED", "SHARED"] as const;
 type FilterOption = (typeof filters)[number];
@@ -32,10 +33,15 @@ export default function DocsPage() {
 
   const filteredDocs = useMemo(() => {
     if (!documents) return [];
-    if (filter === "ALL") return documents;
-    if (filter === "OWNED")
-      return documents.filter((d: { role: string }) => d.role === "OWNER");
-    return documents.filter((d: { role: string }) => d.role !== "OWNER");
+
+    switch (filter) {
+      case "OWNED":
+        return documents.filter((d) => d.role === "OWNER");
+      case "SHARED":
+        return documents.filter((d) => d.role !== "OWNER");
+      default:
+        return documents;
+    }
   }, [documents, filter]);
 
   const handleNavigate = (href: string) => {
@@ -154,7 +160,9 @@ export default function DocsPage() {
                           </div>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>{doc.role}</p>
+                          <Badge variant={doc.role === "OWNER" ? "default" : "secondary"}>
+                            {doc.role}
+                          </Badge>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>

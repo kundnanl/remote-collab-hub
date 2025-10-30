@@ -110,26 +110,32 @@ export function PresenceProvider({ children, orgId }: Props) {
 
     return () => {
       setReady(false)
-      ;(async () => {
-        try { await ch.untrack() } catch {}
-        try { await ch.unsubscribe() } catch {}
-      })()
+        ; (async () => {
+          try { await ch.untrack() } catch { }
+          try { await ch.unsubscribe() } catch { }
+        })()
     }
   }, [initialSelf?.userId, orgId])
 
-  const updatePresence = useCallback(
-    async (patch: Partial<PresenceMeta>) => {
-      if (!channelRef.current || !me) return
-      const next: PresenceMeta = { ...me, ...patch }
-      if (typeof window !== 'undefined') {
-        if (next.roomId) localStorage.setItem(lastRoomStorageKey, next.roomId)
-        else localStorage.removeItem(lastRoomStorageKey)
-      }
-      await channelRef.current.track(next)
-      setMe(next)
-    },
-    [me, lastRoomStorageKey]
-  )
+const updatePresence = useCallback(
+  async (patch: Partial<PresenceMeta>) => {
+    if (!channelRef.current || !me) return;
+
+    const next: PresenceMeta = { ...me, ...patch };
+
+    // Prevent re-tracking identical presence states
+    if (JSON.stringify(next) === JSON.stringify(me)) return;
+
+    if (typeof window !== 'undefined') {
+      if (next.roomId) localStorage.setItem(lastRoomStorageKey, next.roomId);
+      else localStorage.removeItem(lastRoomStorageKey);
+    }
+
+    await channelRef.current.track(next);
+    setMe(next);
+  },
+  [me, lastRoomStorageKey]
+);
 
   const setStatus = useCallback(async (s: PresenceStatus) => {
     await updatePresence({ status: s })
