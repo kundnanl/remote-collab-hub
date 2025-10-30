@@ -11,9 +11,9 @@ export default async function DashboardLayout({
 }: {
   children: ReactNode;
 }) {
-  const { userId, orgId } = await auth();
+  const { userId } = await auth();
 
-  if (!userId || !orgId) redirect("/sign-in");
+  if (!userId) redirect("/sign-in");
 
   const user = await prisma.user.findUnique({
     where: { clerkId: userId },
@@ -25,7 +25,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <ClientPresenceWrapper orgId={orgId}>
+    <ClientPresenceWrapper orgId={"12903218309"}>
       <main className="min-h-screen bg-background text-foreground grainy">
         {/* Background gradients */}
         <div className="absolute inset-0 -z-10">
